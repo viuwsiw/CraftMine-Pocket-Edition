@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#1b1b1b">
+  <title>CraftMine: Pocket Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="gl"></canvas>
+
+  <!-- Главный экран -->
+  <section id="screen-menu" class="screen menu-bg">
+    <div class="logo-wrap">
+      <h1 class="logo">CraftMine</h1>
+      <div class="subtitle">Pocket Edition</div>
+    </div>
+    <div class="menu-buttons">
+      <button class="btn big" id="btn-play">Играть</button>
+      <button class="btn" id="btn-settings">Настройки</button>
+    </div>
+    <div class="version">v0.0.1 alpha</div>
+    <div class="player-tag">Игрок: <span>Nikita</span></div>
+  </section>
+
+  <!-- Список миров -->
+  <section id="screen-worlds" class="screen dirt-bg hidden">
+    <div class="panel-title">Выбор мира</div>
+    <div class="worlds-list" id="worlds-list"></div>
+    <div class="row-buttons">
+      <button class="btn" id="btn-worlds-back">Назад</button>
+      <button class="btn green" id="btn-new-world">Создать новый</button>
+    </div>
+  </section>
+
+  <!-- Создание мира -->
+  <section id="screen-create" class="screen dirt-bg hidden">
+    <div class="panel-title">Создание мира</div>
+    <div class="form">
+      <label class="field">
+        <span>Название мира</span>
+        <input id="world-name" type="text" maxlength="32" value="Мой мир" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Сид (можно оставить пустым)</span>
+        <input id="world-seed" type="text" maxlength="32" placeholder="Случайный" autocomplete="off">
+      </label>
+      <div class="field">
+        <span>Тип мира</span>
+        <div class="toggle" id="world-type">
+          <button class="btn small selected" data-type="normal">Обычный</button>
+          <button class="btn small" data-type="flat">Плоский</button>
+        </div>
+      </div>
+      <div class="hint">Игровой персонаж: Nikita</div>
+    </div>
+    <div class="row-buttons">
+      <button class="btn" id="btn-create-back">Назад</button>
+      <button class="btn green" id="btn-create">Создать мир</button>
+    </div>
+  </section>
+
+  <!-- Настройки -->
+  <section id="screen-settings" class="screen dirt-bg hidden">
+    <div class="panel-title">Настройки</div>
+    <div class="form">
+      <label class="field">
+        <span>Дальность прорисовки: <b id="val-rd"></b> чанк.</span>
+        <input id="set-rd" type="range" min="2" max="8" step="1">
+      </label>
+      <label class="field">
+        <span>Чувствительность: <b id="val-sens"></b>%</span>
+        <input id="set-sens" type="range" min="30" max="250" step="10">
+      </label>
+      <label class="check"><input id="set-autojump" type="checkbox"> Автопрыжок</label>
+      <label class="check"><input id="set-coords" type="checkbox"> Показывать координаты и FPS</label>
+    </div>
+    <div class="row-buttons">
+      <button class="btn green" id="btn-settings-done">Готово</button>
+    </div>
+  </section>
+
+  <!-- Загрузка -->
+  <section id="screen-loading" class="screen dirt-bg hidden">
+    <div class="loading-box">
+      <div class="loading-title" id="loading-title">Генерация мира</div>
+      <div class="loading-sub" id="loading-sub">Строим ландшафт...</div>
+      <div class="bar"><div class="bar-fill" id="loading-bar"></div></div>
+    </div>
+  </section>
+
+  <!-- Игровой интерфейс -->
+  <section id="hud" class="hidden">
+    <div id="look-zone"></div>
+    <div id="crosshair"></div>
+    <div id="debug" class="hidden"></div>
+    <button id="btn-pause" aria-label="Пауза"><i></i><i></i></button>
+    <div id="dpad">
+      <div class="dp diag" data-dir="ul"></div>
+      <div class="dp" data-dir="up"><svg viewBox="0 0 10 10"><path d="M5 2 L9 7 L1 7 Z"/></svg></div>
+      <div class="dp diag" data-dir="ur"></div>
+      <div class="dp" data-dir="left"><svg viewBox="0 0 10 10"><path d="M2 5 L7 1 L7 9 Z"/></svg></div>
+      <div class="dp jump" data-dir="jump"><span></span></div>
+      <div class="dp" data-dir="right"><svg viewBox="0 0 10 10"><path d="M8 5 L3 1 L3 9 Z"/></svg></div>
+      <div class="dp empty"></div>
+      <div class="dp" data-dir="down"><svg viewBox="0 0 10 10"><path d="M5 8 L9 3 L1 3 Z"/></svg></div>
+      <div class="dp empty"></div>
+    </div>
+  </section>
+
+  <!-- Пауза -->
+  <section id="screen-pause" class="screen dim-bg hidden">
+    <div class="panel-title">Игра на паузе</div>
+    <div class="pause-info" id="pause-info"></div>
+    <div class="menu-buttons">
+      <button class="btn big" id="btn-resume">Продолжить</button>
+      <button class="btn" id="btn-pause-settings">Настройки</button>
+      <button class="btn" id="btn-quit">Сохранить и выйти</button>
+    </div>
+  </section>
+
+  <div id="error" class="hidden"></div>
+
+  <script src="js/noise.js"></script>
+  <script src="js/textures.js"></script>
+  <script src="js/world.js"></script>
+  <script src="js/renderer.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/controls.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
