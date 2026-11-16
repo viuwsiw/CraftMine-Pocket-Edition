@@ -56,12 +56,31 @@
     return vary(GRASS, 0.08);
   });
 
-  function dirtPixel() {
-    const r = rand();
-    if (r < 0.1) return mul(DIRT, 0.72);
-    if (r > 0.93) return mul([150, 118, 88], 1);
-    return vary(DIRT, 0.08);
+  // Земля: грубая, с комками разных оттенков и мелкими камешками.
+  // Карта 16x16 строится один раз и используется и для земли, и для низа боковины травы.
+  const DIRT_PAL = [[88, 60, 40], [108, 76, 50], [126, 90, 60], [146, 106, 72], [164, 124, 86]];
+  const dirtMap = [];
+  {
+    const lvl = new Array(256);
+    for (let i = 0; i < 256; i++) lvl[i] = rand() < 0.5 ? 1 : 2;
+    const stamp = (cx, cy, w, h, v) => {
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        if ((x === 0 || x === w - 1) && (y === 0 || y === h - 1) && rand() < 0.6) continue;
+        lvl[((cy + y) & 15) * 16 + ((cx + x) & 15)] = v;
+      }
+    };
+    for (let i = 0; i < 16; i++) stamp(Math.floor(rand() * 16), Math.floor(rand() * 16), 2 + Math.floor(rand() * 2), 2 + Math.floor(rand() * 2), 0);
+    for (let i = 0; i < 12; i++) stamp(Math.floor(rand() * 16), Math.floor(rand() * 16), 2, 1 + Math.floor(rand() * 2), 3);
+    for (let i = 0; i < 10; i++) lvl[Math.floor(rand() * 256)] = 4;
+    for (let i = 0; i < 256; i++) dirtMap.push(vary(DIRT_PAL[lvl[i]], 0.04));
+    // камешки 1-2 пикселя
+    for (let i = 0; i < 5; i++) {
+      const x = Math.floor(rand() * 15), y = Math.floor(rand() * 15), g = 112 + Math.floor(rand() * 40);
+      dirtMap[y * 16 + x] = [g, g - 4, g - 10, 255];
+      if (rand() < 0.5) dirtMap[y * 16 + x + 1] = [g - 26, g - 30, g - 34, 255];
+    }
   }
+  const dirtPixel = (x, y) => dirtMap[y * 16 + x];
   paint('dirt', dirtPixel);
 
   const grassDepth = [];
@@ -69,7 +88,7 @@
   paint('grass_side', (x, y) => {
     if (y < grassDepth[x]) return vary(GRASS, 0.09);
     if (y === grassDepth[x] && rand() < 0.4) return mul(GRASS, 0.7);
-    return dirtPixel();
+    return dirtPixel(x, y);
   });
 
   const stoneBlob = blobField(4);
