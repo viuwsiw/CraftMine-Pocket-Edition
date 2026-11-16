@@ -21,8 +21,17 @@
       return btn && this.dpad.contains(btn) ? btn.dataset.dir : null;
     }
 
+    _jumpPressed() {
+      const now = performance.now();
+      if (now - (this.lastJump || 0) < 320) { this.doubleJump = true; this.lastJump = 0; } else this.lastJump = now;
+    }
+
+    consumeDoubleJump() { const d = this.doubleJump; this.doubleJump = false; return !!d; }
+
     _refreshDpad() {
       const active = new Set(this.dpadPointers.values());
+      if (active.has('jump') && !this.jumpWasActive) this._jumpPressed();
+      this.jumpWasActive = active.has('jump');
       this.dpad.querySelectorAll('[data-dir]').forEach((b) => b.classList.toggle('active', active.has(b.dataset.dir)));
       this.dpad.classList.toggle('moving-forward', active.has('up') || active.has('ul') || active.has('ur'));
     }
@@ -64,7 +73,8 @@
         e.preventDefault();
         if (e.pointerType === 'mouse' && e.button === 2) { this.taps.push({ x: e.clientX, y: e.clientY }); return; }
         if (this.touch) return;
-        this.touch = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t0: performance.now(), mode: 'pending' };
+        const now = performance.now();
+        this.touch = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, ax: e.clientX, ay: e.clientY, t0: now, tm: now, mode: 'pending' };
         try { z.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       });
       z.addEventListener('pointermove', (e) => {
@@ -76,10 +86,13 @@
           t.mode = 'look';
           t.x = e.clientX; t.y = e.clientY;
         }
-        if (t.mode === 'look') {
+        // В режиме обзора и во время ломания палец поворачивает камеру
+        if (t.mode === 'look' || t.mode === 'break') {
           this.lookDX += e.clientX - t.x;
           this.lookDY += e.clientY - t.y;
         }
+        // запоминаем, когда палец заметно сдвинулся (для «задержал палец — ломаем»)
+        if (Math.hypot(e.clientX - t.ax, e.clientY - t.ay) > 6) { t.ax = e.clientX; t.ay = e.clientY; t.tm = performance.now(); }
         t.x = e.clientX; t.y = e.clientY;
       });
       const end = (e) => {
@@ -98,6 +111,8 @@
     updateGesture(now) {
       const t = this.touch;
       if (t && t.mode === 'pending' && now - t.t0 >= 300) t.mode = 'break';
+      // остановил палец во время обзора — тоже начинаем ломать
+      if (t && t.mode === 'look' && now - t.tm >= 380) t.mode = 'break';
       return t && t.mode === 'break' ? t : null;
     }
 
@@ -107,7 +122,8 @@
       window.addEventListener('keydown', (e) => {
         if (e.target && (e.target.tagName === 'INPUT')) return;
         this.keys.add(e.code);
-        if (e.code === 'Space') e.preventDefault();
+        if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this._jumpPressed(); }
+        if (e.code === 'KeyE' && !e.repeat && this.onInventoryKey) this.onInventoryKey();
         if (/^Digit[1-9]$/.test(e.code) && this.onDigit) this.onDigit(+e.code.slice(5) - 1);
       });
       window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -133,7 +149,8 @@
       if (dirs.has('left') || dirs.has('ul') || k.has('KeyA') || k.has('ArrowLeft')) strafe -= 1;
       if (dirs.has('right') || dirs.has('ur') || k.has('KeyD') || k.has('ArrowRight')) strafe += 1;
       const jump = dirs.has('jump') || k.has('Space');
-      return { forward: Math.max(-1, Math.min(1, forward)), strafe: Math.max(-1, Math.min(1, strafe)), jump };
+      const down = dirs.has('fdown') || k.has('ShiftLeft') || k.has('ShiftRight');
+      return { forward: Math.max(-1, Math.min(1, forward)), strafe: Math.max(-1, Math.min(1, strafe)), jump, down };
     }
 
     consumeLook() {

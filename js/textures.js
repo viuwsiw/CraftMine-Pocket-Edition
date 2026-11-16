@@ -4,7 +4,7 @@
   const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'water',
     'log_side', 'log_top', 'leaves', 'bedrock', 'gravel', 'planks', 'cobblestone',
     'glass', 'bricks', 'birch_side', 'birch_top', 'outline',
-    'crack_0', 'crack_1', 'crack_2', 'crack_3'];
+    'crack_0', 'crack_1', 'crack_2', 'crack_3', 'door_bottom', 'door_top', 'trapdoor', 'skin'];
   const TILES = {};
   NAMES.forEach((n, i) => { TILES[n] = i; });
 
@@ -224,6 +224,37 @@
     const on = new Set(crackPx.slice(0, Math.ceil(crackPx.length * (st + 1) / 4)));
     paint('crack_' + st, (x, y) => (on.has(y * 16 + x) ? [20, 20, 20, 210] : [0, 0, 0, 0]));
   }
+
+  // Дверь: рамка, вертикальные доски, ручка; в верхней половине — окошко
+  const DOOR_WOOD = [150, 108, 64];
+  function doorPixel(x, y, upper) {
+    if (x === 0 || x === 15 || (upper ? y === 0 : y === 15)) return vary(mul(DOOR_WOOD, 0.62), 0.05);
+    if (x === 1 || x === 14 || (upper ? y === 1 : y === 14)) return vary(mul(DOOR_WOOD, 0.8), 0.05);
+    if (upper && y >= 3 && y <= 9 && x >= 3 && x <= 12) {
+      if (x === 7 || x === 8 || y === 6) return vary(mul(DOOR_WOOD, 0.7), 0.05);
+      if (x === 3 || x === 12 || y === 3 || y === 9) return vary(mul(DOOR_WOOD, 0.7), 0.05);
+      return [0, 0, 0, 0];
+    }
+    if (!upper && x >= 11 && x <= 12 && y >= 1 && y <= 2) return [70, 70, 74, 255];
+    if (!upper && x === 12 && y === 3) return [40, 40, 44, 255];
+    const board = Math.floor((x - 2) / 4);
+    let c = mul(DOOR_WOOD, 0.92 + (board % 2) * 0.1);
+    if ((x - 2) % 4 === 3) c = mul(c, 0.78);
+    return vary(c, 0.05);
+  }
+  paint('door_bottom', (x, y) => doorPixel(x, y, false));
+  paint('door_top', (x, y) => doorPixel(x, y, true));
+
+  paint('trapdoor', (x, y) => {
+    if (x === 0 || y === 0 || x === 15 || y === 15) return vary(mul(DOOR_WOOD, 0.62), 0.05);
+    const hx = (x >= 3 && x <= 6) || (x >= 9 && x <= 12);
+    const hy = (y >= 3 && y <= 6) || (y >= 9 && y <= 12);
+    if (hx && hy) return [0, 0, 0, 0];
+    if (x === 1 || y === 1 || x === 14 || y === 14) return vary(mul(DOOR_WOOD, 0.8), 0.05);
+    return vary(mul(DOOR_WOOD, y % 4 === 0 ? 0.82 : 0.96), 0.05);
+  });
+
+  paint('skin', () => vary([214, 164, 124], 0.04));
 
   function tileURL(name, scale) {
     const s = scale || 1;

@@ -85,31 +85,112 @@
     toast.timer = setTimeout(() => t.classList.add('hidden'), ms || 2200);
   }
 
-  // ---------- Панель блоков и сердца ----------
-  const HOTBAR = [Bk.STONE, Bk.COBBLE, Bk.DIRT, Bk.GRASS, Bk.PLANKS, Bk.LOG, Bk.GLASS, Bk.BRICKS, Bk.SAND];
+  // ---------- Инвентарь, панель блоков и сердца ----------
+  const Items = CM.Items;
+  Items.buildIcons();
+  let inv = Items.Inventory.creativeDefault();
+  let creative = true;
   let selected = 0;
-  {
-    const hb = $('hotbar');
-    HOTBAR.forEach((id, i) => {
-      const s = document.createElement('div');
-      s.className = 'slot';
-      s.innerHTML = `<span class="cnt">∞</span><img alt="" src="${CM.Textures.blockIcon(CM.BLOCKS[id].tex, 48)}">`;
-      s.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); selectSlot(i); });
-      hb.appendChild(s);
+  const hbSlots = [];
+  for (let i = 0; i < 9; i++) {
+    const el = document.createElement('div');
+    el.className = 'slot';
+    el.innerHTML = '<img alt=""><span class="cnt"></span>';
+    el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); selectSlot(i); });
+    $('hotbar').appendChild(el);
+    hbSlots.push(el);
+  }
+  function renderHotbar() {
+    hbSlots.forEach((el, i) => {
+      const it = inv.slots[i];
+      const img = el.querySelector('img');
+      el.classList.toggle('empty-slot', !it);
+      if (it && img.dataset.id !== String(it.id)) { img.src = Items.icon(it.id); img.dataset.id = it.id; }
+      if (!it) img.dataset.id = '';
+      el.querySelector('.cnt').textContent = it && !creative && it.count > 1 ? it.count : '';
+      el.classList.toggle('sel', i === selected);
     });
   }
+  function heldItem() { const it = inv.slots[selected]; return it ? it.id : 0; }
   function selectSlot(i) {
-    selected = (i + HOTBAR.length) % HOTBAR.length;
-    $('hotbar').querySelectorAll('.slot').forEach((s, k) => s.classList.toggle('sel', k === selected));
+    selected = (i + 9) % 9;
+    renderHotbar();
+    const it = inv.slots[selected];
     const n = $('item-name');
-    n.textContent = CM.BLOCKS[HOTBAR[selected]].name;
-    n.classList.add('show');
+    n.textContent = it ? Items.name(it.id) : '';
+    n.classList.toggle('show', !!it);
     clearTimeout(selectSlot.t);
     selectSlot.t = setTimeout(() => n.classList.remove('show'), 1200);
   }
-  selectSlot(0);
   controls.onDigit = (i) => { if (state === 'game') selectSlot(i); };
   window.addEventListener('wheel', (e) => { if (state === 'game') selectSlot(selected + Math.sign(e.deltaY)); }, { passive: true });
+
+  // Экран инвентаря
+  let picked = -1;
+  function openInventory() {
+    if (state !== 'game') return;
+    state = 'inventory';
+    picked = -1;
+    controls.reset();
+    renderInventory();
+    show('screen-inv');
+  }
+  function closeInventory() {
+    if (state !== 'inventory') return;
+    state = 'game';
+    controls.reset();
+    show(null);
+    selectSlot(selected);
+  }
+  function slotEl(it, cls) {
+    const d = document.createElement('div');
+    d.className = 'islot' + (cls || '');
+    if (it) d.innerHTML = `<img alt="" src="${Items.icon(it.id)}">` + (!creative && it.count > 1 ? `<span class="cnt">${it.count}</span>` : '');
+    return d;
+  }
+  function renderInventory() {
+    const grid = $('inv-grid'), hb = $('inv-hotbar');
+    grid.innerHTML = ''; hb.innerHTML = '';
+    grid.classList.toggle('catalog', creative);
+    if (creative) {
+      $('inv-title').textContent = 'Все блоки';
+      $('inv-help').textContent = 'Нажми на блок, и он попадёт в выбранную ячейку панели. Повторный тап по выбранной ячейке очищает её.';
+      for (const id of Items.CATALOG) {
+        const d = slotEl({ id, count: 1 });
+        d.title = Items.name(id);
+        d.addEventListener('click', () => { inv.slots[selected] = { id, count: 1 }; renderInventory(); renderHotbar(); });
+        grid.appendChild(d);
+      }
+      for (let i = 0; i < 9; i++) {
+        const d = slotEl(inv.slots[i], i === selected ? ' sel' : '');
+        d.addEventListener('click', () => {
+          if (i === selected) inv.slots[i] = null;
+          selected = i;
+          renderInventory(); renderHotbar();
+        });
+        hb.appendChild(d);
+      }
+    } else {
+      $('inv-title').textContent = 'Инвентарь';
+      $('inv-help').textContent = 'Нажми на предмет, затем на другую ячейку: предметы переложатся. Нижний ряд — панель быстрого доступа.';
+      const cell = (i) => {
+        const d = slotEl(inv.slots[i], (i === picked ? ' picked' : '') + (i === selected ? ' sel' : ''));
+        d.addEventListener('click', () => {
+          if (picked < 0) {
+            if (inv.slots[i]) picked = i;
+            else if (i < 9) selected = i;
+          } else { inv.move(picked, i); picked = -1; }
+          renderInventory(); renderHotbar();
+        });
+        return d;
+      };
+      for (let i = 9; i < 36; i++) grid.appendChild(cell(i));
+      for (let i = 0; i < 9; i++) hb.appendChild(cell(i));
+    }
+  }
+  tap('btn-inv', openInventory);
+  tap('btn-inv-close', closeInventory);
+  controls.onInventoryKey = () => { if (state === 'game') openInventory(); else if (state === 'inventory') closeInventory(); };
 
   const HEART = ['.##.##.', '#ab#bb#', '#abbbb#', '#bbbbb#', '.#bbb#.', '..#b#..', '...#...'];
   const heartFull = P(HEART, { '#': '#2a0a0a', a: '#ffb3b3', b: '#e0262b' }, 2);
@@ -143,10 +224,10 @@
   }
 
   // ---------- Экраны ----------
-  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead'];
+  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead', 'screen-inv'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
-    $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused' || state === 'dead'));
+    $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused' || state === 'dead' || state === 'inventory'));
   }
 
   function tap(id, fn) { $(id).addEventListener('click', (e) => { e.preventDefault(); fn(e); }); }
@@ -177,7 +258,7 @@
         <div class="world-icon" style="background-image:url(${icon})"></div>
         <div class="world-meta">
           <div class="world-name"></div>
-          <div class="world-sub">${w.type === 'flat' ? 'Плоский' : 'Обычный'} · ${date}<br>Сид: ${escapeHtml(w.seedText || w.seed)}</div>
+          <div class="world-sub">${(w.mode || 'creative') === 'creative' ? 'Творческий' : 'Выживание'} · ${w.type === 'flat' ? 'Плоский' : 'Обычный'} · ${date}<br>Сид: ${escapeHtml(w.seedText || w.seed)}</div>
         </div>
         <button class="world-del" aria-label="Удалить">✕</button>`;
       item.querySelector('.world-name').textContent = w.name;
@@ -213,6 +294,19 @@
       $('world-type').querySelectorAll('[data-type]').forEach((x) => x.classList.toggle('selected', x === b));
     });
   });
+  let worldMode = 'survival';
+  const MODE_HINT = {
+    survival: 'Пустой инвентарь, сердца и урон. Добывай блоки сам.',
+    creative: 'Все блоки без ограничений, полёт (двойной тап прыжка), бессмертие.',
+  };
+  $('world-mode').querySelectorAll('[data-mode]').forEach((b) => {
+    b.addEventListener('click', (e) => {
+      e.preventDefault();
+      worldMode = b.dataset.mode;
+      $('world-mode').querySelectorAll('[data-mode]').forEach((x) => x.classList.toggle('selected', x === b));
+      $('mode-hint').textContent = MODE_HINT[worldMode];
+    });
+  });
   tap('btn-create-back', () => show('screen-worlds'));
   tap('btn-create', () => {
     const name = $('world-name').value.trim() || 'Мой мир';
@@ -223,7 +317,7 @@
     else seed = CM.hashString(seedText) | 0;
     const rec = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name, seed, seedText: seedText || String(seed), type: worldType,
+      name, seed, seedText: seedText || String(seed), type: worldType, mode: worldMode, inventory: null,
       created: Date.now(), lastPlayed: Date.now(),
       version: VERSION, player: null,
     };
@@ -260,7 +354,7 @@
     state = 'paused';
     controls.reset();
     savePlayer();
-    $('pause-info').innerHTML = `Мир: ${escapeHtml(current.name)}<br>Игрок: ${PLAYER_NAME}`;
+    $('pause-info').innerHTML = `Мир: ${escapeHtml(current.name)}<br>Режим: ${creative ? 'Творческий' : 'Выживание'}<br>Игрок: ${PLAYER_NAME}`;
     show('screen-pause');
   }
   function resume() {
@@ -295,6 +389,7 @@
   window.addEventListener('keydown', (e) => {
     if (e.code === 'Escape') {
       if (state === 'game') pause();
+      else if (state === 'inventory') closeInventory();
       else if (state === 'paused' && !$('screen-pause').classList.contains('hidden')) resume();
     }
   });
@@ -333,11 +428,19 @@
       if (navigator.vibrate) try { navigator.vibrate(60); } catch (_) { /* ignore */ }
     };
     breaking = null;
+    creative = (rec.mode || 'creative') === 'creative';
+    inv = rec.inventory ? new Items.Inventory(rec.inventory) : (creative ? Items.Inventory.creativeDefault() : new Items.Inventory());
+    player.invulnerable = creative;
+    player.canFly = creative;
+    selected = 0;
+    renderHotbar();
+    $('hearts').style.visibility = creative ? 'hidden' : 'visible';
     if (rec.player) {
       player.pos = [rec.player.x, rec.player.y, rec.player.z];
       player.yaw = rec.player.yaw || 0;
       player.pitch = rec.player.pitch || 0;
       player.health = rec.player.health || 20;
+      player.flying = creative && !!rec.player.flying;
       player.needsGround = false;
     } else {
       const sp = world.findSpawn();
@@ -360,7 +463,9 @@
 
   function savePlayer() {
     if (!current || !player || player.needsGround) return;
-    current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health };
+    current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: player.flying };
+    current.inventory = inv.toJSON();
+    current.mode = creative ? 'creative' : 'survival';
     current.lastPlayed = Date.now();
     updateRecord(current);
     if (world) store.set('edits.' + current.id, world.exportEdits());
@@ -375,34 +480,79 @@
     return world.raycast([cam.x, cam.y, cam.z], renderer.screenRay(cam, sx, sy), REACH);
   }
 
-  function placeAt(cam, sx, sy) {
+  // Тап: открыть/закрыть дверь или люк, иначе поставить предмет из руки
+  function useAt(cam, sx, sy) {
     const hit = pick(cam, sx, sy);
-    if (!hit || (!hit.n[0] && !hit.n[1] && !hit.n[2])) return;
+    if (!hit) return;
+    const hb = CM.BLOCKS[hit.id];
+    if (hb.kind === 'door' || hb.kind === 'trapdoor') { toggleOpen(hit.x, hit.y, hit.z, hit.id); swing = 1; return; }
+    const item = heldItem();
+    if (!item || (!hit.n[0] && !hit.n[1] && !hit.n[2])) return;
     const x = hit.x + hit.n[0], y = hit.y + hit.n[1], z = hit.z + hit.n[2];
-    const cur = world.getBlock(x, y, z);
-    if (cur !== Bk.AIR && cur !== Bk.WATER) return;
-    if (player.intersectsBlock(x, y, z)) return;
-    if (world.setBlock(x, y, z, HOTBAR[selected])) swing = 1;
+    const free = (bx, by, bz) => {
+      if (by < 0 || by >= CM.H) return false;
+      const c = world.getBlock(bx, by, bz);
+      return (c === Bk.AIR || c === Bk.WATER) && !player.intersectsBlock(bx, by, bz);
+    };
+    if (!free(x, y, z)) return;
+    const ib = CM.BLOCKS[item], f = player.facing;
+    let ok = false;
+    if (ib.kind === 'door') {
+      const below = CM.BLOCKS[world.getBlock(x, y - 1, z)];
+      if (!free(x, y + 1, z) || !below || !below.solid || below.boxes) return;
+      ok = world.setBlock(x, y, z, Bk.DOOR + f) && world.setBlock(x, y + 1, z, Bk.DOOR + f + 8);
+    } else if (ib.kind === 'stairs' || ib.kind === 'trapdoor') ok = world.setBlock(x, y, z, item + f);
+    else ok = world.setBlock(x, y, z, item);
+    if (ok) {
+      swing = 1;
+      if (!creative) { inv.takeOne(selected); selectSlot(selected); }
+    }
+  }
+
+  function toggleOpen(x, y, z, id) {
+    world.setBlock(x, y, z, id ^ 4);
+    const b = CM.BLOCKS[id];
+    if (b.kind === 'door') {
+      const oy = b.upper ? y - 1 : y + 1, o = world.getBlock(x, oy, z);
+      if (CM.BLOCKS[o] && CM.BLOCKS[o].kind === 'door') world.setBlock(x, oy, z, o ^ 4);
+    }
+  }
+
+  function breakBlock(hit) {
+    const b = CM.BLOCKS[hit.id];
+    world.setBlock(hit.x, hit.y, hit.z, Bk.AIR);
+    if (b.kind === 'door') {
+      const oy = b.upper ? hit.y - 1 : hit.y + 1, o = world.getBlock(hit.x, oy, hit.z);
+      if (CM.BLOCKS[o] && CM.BLOCKS[o].kind === 'door') world.setBlock(hit.x, oy, hit.z, Bk.AIR);
+    }
+    if (!creative && b.item) {
+      if (inv.add(b.item, 1) > 0) toast('Инвентарь полон');
+      renderHotbar();
+    }
   }
 
   // Обработка ломания/установки, возвращает данные для подсветки
+  let breakCooldown = 0;
   function interact(dt, cam, now) {
     const extras = { selection: null, crack: null };
-    for (const t of controls.consumeTaps()) placeAt(cam, t.x, t.y);
+    for (const t of controls.consumeTaps()) useAt(cam, t.x, t.y);
     const g = controls.updateGesture(now);
     const aim = g || (controls.hover && !controls.touch ? controls.hover : null);
     const hit = aim ? pick(cam, aim.x, aim.y) : null;
     if (hit) extras.selection = hit;
+    breakCooldown -= dt;
     if (g && hit) {
-      if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) breaking = { x: hit.x, y: hit.y, z: hit.z, progress: 0 };
-      const hard = CM.BLOCKS[hit.id].hardness;
-      if (hard > 0) {
-        breaking.progress += dt / hard;
-        extras.crack = { x: hit.x, y: hit.y, z: hit.z, stage: Math.min(3, Math.floor(breaking.progress * 4)) };
-        if (breaking.progress >= 1) {
-          world.setBlock(hit.x, hit.y, hit.z, Bk.AIR);
-          breaking = null;
-          extras.crack = null;
+      if (creative) {
+        // в творческом режиме блоки ломаются сразу, по одному за 0.25 с
+        if (breakCooldown <= 0) { breakBlock(hit); breakCooldown = 0.25; swing = 1; }
+        breaking = null;
+      } else {
+        if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) breaking = { x: hit.x, y: hit.y, z: hit.z, progress: 0 };
+        const hard = CM.BLOCKS[hit.id].hardness;
+        if (hard > 0) {
+          breaking.progress += dt / hard;
+          extras.crack = { x: hit.x, y: hit.y, z: hit.z, bounds: hit.bounds, stage: Math.min(3, Math.floor(breaking.progress * 4)) };
+          if (breaking.progress >= 1) { breakBlock(hit); breaking = null; extras.crack = null; }
         }
       }
       if (swing <= 0) swing = 1;
@@ -458,13 +608,15 @@
       const look = controls.consumeLook();
       const k = 0.0052 * settings.sensitivity / 100;
       player.look(look[0] * k, look[1] * k);
+      if (controls.consumeDoubleJump()) player.toggleFly();
       if (world.isLoadedAt(player.pos[0], player.pos[2])) {
         const hpBefore = player.health;
         player.update(dt, controls.state(), world, { autoJump: settings.autoJump });
         if (!settings.fallDamage && player.health < hpBefore) player.health = hpBefore;
       }
       renderHearts(player.health);
-      if (player.health <= 0) {
+      $('dpad').classList.toggle('flying', player.flying);
+      if (player.health <= 0 && !creative) {
         state = 'dead';
         controls.reset();
         show('screen-dead');
@@ -482,8 +634,12 @@
     const cam = player.camera();
     const extras = state === 'game' ? interact(dt, cam, now) : { selection: null, crack: null };
     const hs = Math.hypot(player.vel[0], player.vel[2]);
+    const held = heldItem();
+    const shape = held ? Items.itemShape(held) : null;
     extras.hand = {
-      tex: CM.BLOCKS[HOTBAR[selected]].tex,
+      arm: !held,
+      boxes: shape && shape.boxes,
+      tex: shape && shape.tex,
       swing,
       bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs),
       bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs),
@@ -496,6 +652,7 @@
   window.CMBack = function () {
     const visible = (id) => !$(id).classList.contains('hidden');
     if (state === 'game') { pause(); return true; }
+    if (state === 'inventory') { closeInventory(); return true; }
     if (state === 'paused') {
       if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
       resume(); return true;
@@ -507,7 +664,7 @@
     return false;
   };
   // Приложение свернули — ставим паузу и сохраняемся
-  window.CMPause = function () { pause(); savePlayer(); };
+  window.CMPause = function () { closeInventory(); pause(); savePlayer(); };
 
   window.addEventListener('resize', () => renderer.resize());
   document.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -516,5 +673,5 @@
   show('screen-menu');
   requestAnimationFrame(frame);
 
-  CM.debug = { get world() { return world; }, get player() { return player; }, get state() { return state; }, selectSlot, renderer, pick: (x, y) => pick(player.camera(), x, y) };
+  CM.debug = { get world() { return world; }, get player() { return player; }, get state() { return state; }, selectSlot, get inv() { return inv; }, get creative() { return creative; }, openInventory, renderer, pick: (x, y) => pick(player.camera(), x, y) };
 })(window.CM);

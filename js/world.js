@@ -31,6 +31,59 @@
     [B.LOG]: 0.8, [B.BIRCH]: 0.8, [B.PLANKS]: 0.75, [B.STONE]: 1.0, [B.COBBLE]: 1.1, [B.BRICKS]: 1.1, [B.BEDROCK]: 0 };
   BLOCKS.forEach((b, i) => { b.hardness = HARD[i] === undefined ? 0.5 : HARD[i]; });
 
+  // Что выпадает при ломании в выживании (0 — ничего)
+  const DROP = { [B.GRASS]: B.DIRT, [B.STONE]: B.COBBLE, [B.LEAVES]: 0, [B.GLASS]: 0, [B.WATER]: 0, [B.BEDROCK]: 0 };
+  BLOCKS.forEach((b, i) => { b.item = DROP[i] === undefined ? i : DROP[i]; });
+
+  // ---- Блоки сложной формы: ступеньки, люки, двери ----
+  // Направление f: 0 — север (-Z), 1 — восток (+X), 2 — юг (+Z), 3 — запад (-X)
+  const TH = 3 / 16;
+  const SIDE = [[0, 0, 0, 1, 1, TH], [1 - TH, 0, 0, 1, 1, 1], [0, 0, 1 - TH, 1, 1, 1], [0, 0, 0, TH, 1, 1]];
+  const STAIR_TOP = [[0, 0.5, 0, 1, 1, 0.5], [0.5, 0.5, 0, 1, 1, 1], [0, 0.5, 0.5, 1, 1, 1], [0, 0.5, 0, 0.5, 1, 1]];
+  B.OAK_STAIRS = 32; B.COBBLE_STAIRS = 36; B.TRAPDOOR = 40; B.DOOR = 48;
+  for (let f = 0; f < 4; f++) {
+    BLOCKS[B.OAK_STAIRS + f] = { name: 'Деревянные ступеньки', solid: true, opaque: false, kind: 'stairs', facing: f,
+      tex: [T.planks, T.planks, T.planks], boxes: [[0, 0, 0, 1, 0.5, 1], STAIR_TOP[f]], item: B.OAK_STAIRS, hardness: 0.75 };
+    BLOCKS[B.COBBLE_STAIRS + f] = { name: 'Каменные ступеньки', solid: true, opaque: false, kind: 'stairs', facing: f,
+      tex: [T.cobblestone, T.cobblestone, T.cobblestone], boxes: [[0, 0, 0, 1, 0.5, 1], STAIR_TOP[f]], item: B.COBBLE_STAIRS, hardness: 1.1 };
+    for (let o = 0; o < 2; o++) {
+      BLOCKS[B.TRAPDOOR + f + 4 * o] = { name: 'Люк', solid: true, opaque: false, kind: 'trapdoor', facing: f, open: o,
+        tex: [T.trapdoor, T.trapdoor, T.trapdoor], boxes: [o ? SIDE[f] : [0, 0, 0, 1, TH, 1]], item: B.TRAPDOOR, hardness: 0.6 };
+      for (let u = 0; u < 2; u++) {
+        const t = u ? T.door_top : T.door_bottom;
+        BLOCKS[B.DOOR + f + 4 * o + 8 * u] = { name: 'Дверь', solid: true, opaque: false, kind: 'door', facing: f, open: o, upper: u,
+          tex: [t, t, t], boxes: [SIDE[o ? (f + 3) % 4 : (f + 2) % 4]], item: B.DOOR, hardness: 0.6 };
+      }
+    }
+  }
+  const FULL_BOX = [[0, 0, 0, 1, 1, 1]];
+  BLOCKS.forEach((b) => { if (b.solid) b.bounds = b.boxes ? boundsOf(b.boxes) : FULL_BOX[0]; });
+  function boundsOf(boxes) {
+    const r = [1, 1, 1, 0, 0, 0];
+    for (const b of boxes) for (let a = 0; a < 3; a++) { r[a] = Math.min(r[a], b[a]); r[a + 3] = Math.max(r[a + 3], b[a + 3]); }
+    return r;
+  }
+
+  // Пересечение луча с коробками блока: {t, n} или null
+  function rayBoxes(o, d, bx, by, bz, boxes) {
+    let best = null;
+    for (const b of boxes) {
+      let tmin = -Infinity, tmax = Infinity, axis = -1;
+      const lo = [bx + b[0], by + b[1], bz + b[2]], hi = [bx + b[3], by + b[4], bz + b[5]];
+      let ok = true;
+      for (let a = 0; a < 3; a++) {
+        if (Math.abs(d[a]) < 1e-9) { if (o[a] < lo[a] || o[a] > hi[a]) { ok = false; break; } continue; }
+        let t1 = (lo[a] - o[a]) / d[a], t2 = (hi[a] - o[a]) / d[a];
+        if (t1 > t2) { const t = t1; t1 = t2; t2 = t; }
+        if (t1 > tmin) { tmin = t1; axis = a; }
+        if (t2 < tmax) tmax = t2;
+      }
+      if (!ok || tmin > tmax || tmin < 0 || axis < 0) continue;
+      if (!best || tmin < best.t) { const n = [0, 0, 0]; n[axis] = d[axis] > 0 ? -1 : 1; best = { t: tmin, n }; }
+    }
+    return best;
+  }
+
   const OPAQUE = new Uint8Array(256), SOLID = new Uint8Array(256), OCCLUDES = new Uint8Array(256);
   BLOCKS.forEach((b, i) => {
     OPAQUE[i] = b.opaque ? 1 : 0;
@@ -178,6 +231,36 @@
   const UV_EPS = 0.0008;
 
   let scratch = new Float32Array(6 * 6 * 20000);
+
+  // Меш блока сложной формы: каждая коробка — 6 граней, без затенения
+  function meshShape(blk, x, y, z, get, o) {
+    const tileStep = 1 / CM.Textures.perRow, per = CM.Textures.perRow;
+    const lp = [0, 0, 0], vx = new Float32Array(24);
+    for (const bx of blk.boxes) {
+      const lo = [bx[0], bx[1], bx[2]], hi = [bx[3], bx[4], bx[5]];
+      for (let f = 0; f < 6; f++) {
+        const F = FACES[f];
+        const c = F.s > 0 ? hi[F.d] : lo[F.d];
+        if ((F.s > 0 ? c === 1 : c === 0) && OPAQUE[get(x + F.n[0], y + F.n[1], z + F.n[2])]) continue;
+        const tile = blk.tex[F.texSlot];
+        const u0 = (tile % per) * tileStep, v0 = Math.floor(tile / per) * tileStep;
+        for (let k = 0; k < 4; k++) {
+          const cu = F.corners[k][0], cv = F.corners[k][1];
+          lp[F.d] = c; lp[F.u] = cu ? hi[F.u] : lo[F.u]; lp[F.v] = cv ? hi[F.v] : lo[F.v];
+          let tu, tv;
+          if (F.d === 1) { tu = lp[0]; tv = lp[2]; } else if (F.d === 0) { tu = lp[2]; tv = 1 - lp[1]; } else { tu = lp[0]; tv = 1 - lp[1]; }
+          const b = k * 6;
+          vx[b] = x + lp[0]; vx[b + 1] = y + lp[1]; vx[b + 2] = z + lp[2];
+          vx[b + 3] = u0 + UV_EPS + tu * (tileStep - 2 * UV_EPS);
+          vx[b + 4] = v0 + UV_EPS + tv * (tileStep - 2 * UV_EPS);
+          vx[b + 5] = F.shade;
+        }
+        if (o + 36 > scratch.length) { const n = new Float32Array(scratch.length * 2); n.set(scratch); scratch = n; }
+        for (const k of [0, 1, 2, 0, 2, 3]) { const b = k * 6; for (let e = 0; e < 6; e++) scratch[o++] = vx[b + e]; }
+      }
+    }
+    return o;
+  }
   let scratchW = new Float32Array(6 * 6 * 8000);
 
   function buildMesh(world, ch) {
@@ -209,6 +292,7 @@
           const id = data[idx(x, y, z)];
           if (id === B.AIR) continue;
           const blk = BLOCKS[id];
+          if (blk.boxes) { o = meshShape(blk, x, y, z, get, o); continue; }
           const isWater = id === B.WATER;
           let topH = 1;
           if (isWater && get(x, y + 1, z) !== B.WATER) topH = 0.875;
@@ -348,7 +432,12 @@
       let n = [0, 0, 0], t = 0;
       while (t <= maxDist) {
         const id = this.getBlock(x, y, z);
-        if (id !== B.AIR && id !== B.WATER) return { x, y, z, n, id };
+        if (id !== B.AIR && id !== B.WATER) {
+          const bl = BLOCKS[id];
+          if (!bl.boxes) return { x, y, z, n, id, bounds: FULL_BOX[0] };
+          const h = rayBoxes(o, d, x, y, z, bl.boxes);
+          if (h && h.t <= maxDist) return { x, y, z, n: h.n, id, bounds: bl.bounds };
+        }
         if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; n = [-sx, 0, 0]; }
         else if (ty < tz) { y += sy; t = ty; ty += tdy; n = [0, -sy, 0]; }
         else { z += sz; t = tz; tz += tdz; n = [0, 0, -sz]; }
@@ -368,6 +457,13 @@
     }
 
     isSolid(x, y, z) { return SOLID[this.getBlock(x, y, z)] === 1; }
+
+    // Коробки столкновений блока в координатах [0,1]^3 (null — проходимый)
+    getBoxes(x, y, z) {
+      const b = BLOCKS[this.getBlock(x, y, z)];
+      if (!b || !b.solid) return null;
+      return b.boxes || FULL_BOX;
+    }
 
     isLoadedAt(wx, wz) {
       const ch = this.getChunk(Math.floor(wx / CS), Math.floor(wz / CS));
@@ -504,6 +600,6 @@
   }
 
   CM.CS = CS; CM.H = H; CM.SEA = SEA;
-  CM.B = B; CM.BLOCKS = BLOCKS; CM.SOLID = SOLID;
+  CM.B = B; CM.BLOCKS = BLOCKS; CM.SOLID = SOLID; CM.OPAQUE = OPAQUE; CM.FULL_BOX = FULL_BOX;
   CM.World = World;
 })(window.CM);

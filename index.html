@@ -51,6 +51,14 @@
         <input id="world-seed" type="text" maxlength="32" placeholder="Случайный" autocomplete="off">
       </label>
       <div class="field">
+        <span>Режим игры</span>
+        <div class="toggle" id="world-mode">
+          <button class="btn small selected" data-mode="survival">Выживание</button>
+          <button class="btn small" data-mode="creative">Творческий</button>
+        </div>
+        <div class="hint" id="mode-hint">Пустой инвентарь, сердца и урон. Добывай блоки сам.</div>
+      </div>
+      <div class="field">
         <span>Тип мира</span>
         <div class="toggle" id="world-type">
           <button class="btn small selected" data-type="normal">Обычный</button>
@@ -102,7 +110,7 @@
     <div id="bottom-bar">
       <div id="item-name"></div>
       <div id="hearts"></div>
-      <div id="hotbar"></div>
+      <div class="hotbar-row"><div id="hotbar"></div><button id="btn-inv" aria-label="Инвентарь"><i></i><i></i><i></i></button></div>
     </div>
     <div id="debug" class="hidden"></div>
     <button id="btn-pause" aria-label="Пауза"><i></i><i></i></button>
@@ -115,7 +123,7 @@
       <div class="dp" data-dir="right"><svg viewBox="0 0 10 10"><path d="M8 5 L3 1 L3 9 Z"/></svg></div>
       <div class="dp empty"></div>
       <div class="dp" data-dir="down"><svg viewBox="0 0 10 10"><path d="M5 8 L9 3 L1 3 Z"/></svg></div>
-      <div class="dp empty"></div>
+      <div class="dp fly" data-dir="fdown"><svg viewBox="0 0 10 10"><path d="M5 9 L9 4 L6.5 4 L6.5 1 L3.5 1 L3.5 4 L1 4 Z"/></svg></div>
     </div>
   </section>
 
@@ -127,6 +135,17 @@
       <button class="btn big" id="btn-resume">Продолжить</button>
       <button class="btn" id="btn-pause-settings">Настройки</button>
       <button class="btn" id="btn-quit">Сохранить и выйти</button>
+    </div>
+  </section>
+
+  <!-- Инвентарь -->
+  <section id="screen-inv" class="screen dim-bg hidden">
+    <div class="inv-panel">
+      <div class="inv-head"><span id="inv-title">Инвентарь</span><button class="inv-close" id="btn-inv-close" aria-label="Закрыть">✕</button></div>
+      <div class="inv-grid" id="inv-grid"></div>
+      <div class="inv-sep"></div>
+      <div class="inv-grid hb" id="inv-hotbar"></div>
+      <div class="inv-help" id="inv-help"></div>
     </div>
   </section>
 
@@ -148,6 +167,7 @@
   <script src="js/world.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/player.js"></script>
+  <script src="js/items.js"></script>
   <script src="js/controls.js"></script>
   <script src="js/main.js"></script>
 </body>

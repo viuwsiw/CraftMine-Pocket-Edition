@@ -1,9 +1,9 @@
 'use strict';
-// CraftMine PE — игрок Nikita: физика, коллизии, камера от первого лица
+// CraftMine PE — игрок Nikita: физика, коллизии, полёт, камера от первого лица
 (function (CM) {
   const HALF_W = 0.3, HEIGHT = 1.8, EYE = 1.62;
-  const GRAVITY = 30, JUMP_V = 8.6, WALK = 4.3;
-  const EPS = 1e-4;
+  const GRAVITY = 30, JUMP_V = 8.6, WALK = 4.3, FLY = 9, STEP = 0.6;
+  const EPS = 1e-4, GAP = 1e-5;
 
   class Player {
     constructor(name) {
@@ -17,27 +17,29 @@
       this.headInWater = false;
       this.bob = 0;
       this.health = 20;       // 10 сердец
+      this.invulnerable = false;
+      this.canFly = false;
+      this.flying = false;
       this.fallTop = null;    // высота, с которой начался полёт вниз
       this.regen = 0;
       this.onHurt = null;
     }
 
+    get eye() { return [this.pos[0], this.pos[1] + EYE, this.pos[2]]; }
+
+    // Направление взгляда по горизонтали: 0 — север, 1 — восток, 2 — юг, 3 — запад
+    get facing() {
+      const dx = -Math.sin(this.yaw), dz = -Math.cos(this.yaw);
+      if (Math.abs(dx) > Math.abs(dz)) return dx > 0 ? 1 : 3;
+      return dz < 0 ? 0 : 2;
+    }
+
     hurt(amount) {
-      if (amount <= 0 || this.health <= 0) return;
+      if (this.invulnerable || amount <= 0 || this.health <= 0) return;
       this.health = Math.max(0, this.health - amount);
       this.regen = 0;
       if (this.onHurt) this.onHurt(amount);
     }
-
-    // Пересекается ли игрок с блоком (для запрета установки блока в себя)
-    intersectsBlock(bx, by, bz) {
-      const p = this.pos;
-      return bx + 1 > p[0] - HALF_W && bx < p[0] + HALF_W &&
-        by + 1 > p[1] && by < p[1] + HEIGHT &&
-        bz + 1 > p[2] - HALF_W && bz < p[2] + HALF_W;
-    }
-
-    get eye() { return [this.pos[0], this.pos[1] + EYE, this.pos[2]]; }
 
     look(dx, dy) {
       this.yaw -= dx;
@@ -47,62 +49,92 @@
       if (this.pitch < -lim) this.pitch = -lim;
     }
 
-    boxFree(world, x, y, z) {
-      const x0 = Math.floor(x - HALF_W + EPS), x1 = Math.floor(x + HALF_W - EPS);
-      const y0 = Math.floor(y + EPS), y1 = Math.floor(y + HEIGHT - EPS);
-      const z0 = Math.floor(z - HALF_W + EPS), z1 = Math.floor(z + HALF_W - EPS);
-      for (let by = y0; by <= y1; by++)
-        for (let bz = z0; bz <= z1; bz++)
-          for (let bx = x0; bx <= x1; bx++)
-            if (world.isSolid(bx, by, bz)) return false;
-      return true;
+    toggleFly() {
+      if (!this.canFly) return;
+      this.flying = !this.flying;
+      this.vel[1] = 0;
+      this.fallTop = null;
     }
 
-    // Сдвиг по одной оси с упором в блоки. Возвращает true при столкновении.
-    moveAxis(world, axis, amount) {
-      if (amount === 0) return false;
+    // Пересекается ли игрок с ячейкой блока (для запрета установки блока в себя)
+    intersectsBlock(bx, by, bz) {
       const p = this.pos;
-      p[axis] += amount;
-      const x0 = Math.floor(p[0] - HALF_W + EPS), x1 = Math.floor(p[0] + HALF_W - EPS);
-      const y0 = Math.floor(p[1] + EPS), y1 = Math.floor(p[1] + HEIGHT - EPS);
-      const z0 = Math.floor(p[2] - HALF_W + EPS), z1 = Math.floor(p[2] + HALF_W - EPS);
-      let hit = false, best = amount > 0 ? Infinity : -Infinity;
+      return bx + 1 > p[0] - HALF_W && bx < p[0] + HALF_W &&
+        by + 1 > p[1] && by < p[1] + HEIGHT &&
+        bz + 1 > p[2] - HALF_W && bz < p[2] + HALF_W;
+    }
+
+    _forBoxes(world, min, max, fn) {
+      const x0 = Math.floor(min[0]), x1 = Math.floor(max[0]);
+      const y0 = Math.floor(min[1]), y1 = Math.floor(max[1]);
+      const z0 = Math.floor(min[2]), z1 = Math.floor(max[2]);
       for (let by = y0; by <= y1; by++)
         for (let bz = z0; bz <= z1; bz++)
           for (let bx = x0; bx <= x1; bx++) {
-            if (!world.isSolid(bx, by, bz)) continue;
-            hit = true;
-            const b = axis === 0 ? bx : axis === 1 ? by : bz;
-            if (amount > 0) best = Math.min(best, b); else best = Math.max(best, b + 1);
+            const boxes = world.getBoxes(bx, by, bz);
+            if (!boxes) continue;
+            for (const b of boxes) fn(bx + b[0], by + b[1], bz + b[2], bx + b[3], by + b[4], bz + b[5]);
           }
-      if (!hit) return false;
-      if (axis === 1) p[1] = amount > 0 ? best - HEIGHT - EPS : best + EPS;
-      else p[axis] = amount > 0 ? best - HALF_W - EPS : best + HALF_W + EPS;
-      return true;
     }
 
-    // input: {forward:-1..1, strafe:-1..1, jump:bool}, opts: {autoJump}
+    boxFree(world, x, y, z) {
+      const min = [x - HALF_W, y, z - HALF_W], max = [x + HALF_W, y + HEIGHT, z + HALF_W];
+      let free = true;
+      this._forBoxes(world, min, max, (ax, ay, az, bx, by, bz) => {
+        if (bx > min[0] + EPS && ax < max[0] - EPS && by > min[1] + EPS && ay < max[1] - EPS && bz > min[2] + EPS && az < max[2] - EPS) free = false;
+      });
+      return free;
+    }
+
+    // Сдвиг по одной оси с упором в коробки блоков. Возвращает true при столкновении.
+    moveAxis(world, axis, amount) {
+      if (amount === 0) return false;
+      const p = this.pos;
+      const min = [p[0] - HALF_W, p[1], p[2] - HALF_W], max = [p[0] + HALF_W, p[1] + HEIGHT, p[2] + HALF_W];
+      const smin = min.slice(), smax = max.slice();
+      if (amount > 0) smax[axis] += amount; else smin[axis] += amount;
+      let allowed = amount;
+      const lo = [0, 0, 0], hi = [0, 0, 0];
+      this._forBoxes(world, smin, smax, (ax, ay, az, bx, by, bz) => {
+        lo[0] = ax; lo[1] = ay; lo[2] = az; hi[0] = bx; hi[1] = by; hi[2] = bz;
+        for (let a = 0; a < 3; a++) {
+          if (a === axis) continue;
+          if (hi[a] <= min[a] + EPS || lo[a] >= max[a] - EPS) return;
+        }
+        if (amount > 0) { if (lo[axis] >= max[axis] - EPS) allowed = Math.min(allowed, lo[axis] - max[axis] - GAP); }
+        else if (hi[axis] <= min[axis] + EPS) allowed = Math.max(allowed, hi[axis] - min[axis] + GAP);
+      });
+      if (amount > 0) allowed = Math.max(0, allowed); else allowed = Math.min(0, allowed);
+      p[axis] += allowed;
+      return allowed !== amount;
+    }
+
+    // input: {forward, strafe, jump, down}; opts: {autoJump}
     update(dt, input, world, opts) {
       const p = this.pos, v = this.vel;
       const B = CM.B;
       this.inWater = world.getBlock(Math.floor(p[0]), Math.floor(p[1] + 0.4), Math.floor(p[2])) === B.WATER;
       this.headInWater = world.getBlock(Math.floor(p[0]), Math.floor(p[1] + EYE), Math.floor(p[2])) === B.WATER;
+      if (!this.canFly) this.flying = false;
 
       // Направление движения относительно взгляда
       let f = input.forward, s = input.strafe;
       const len = Math.hypot(f, s);
       if (len > 1) { f /= len; s /= len; }
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
-      const speed = WALK * (this.inWater ? 0.55 : 1);
+      const speed = this.flying ? FLY : WALK * (this.inWater ? 0.55 : 1);
       const tx = (-sy * f + cy * s) * speed;
       const tz = (-cy * f - sy * s) * speed;
-      const accel = this.onGround || this.inWater ? 18 : 5;
+      const accel = this.flying ? 10 : (this.onGround || this.inWater ? 18 : 5);
       const k = 1 - Math.exp(-accel * dt);
       v[0] += (tx - v[0]) * k;
       v[2] += (tz - v[2]) * k;
 
       // Вертикаль
-      if (this.inWater) {
+      if (this.flying) {
+        const ty = ((input.jump ? 1 : 0) - (input.down ? 1 : 0)) * 7;
+        v[1] += (ty - v[1]) * (1 - Math.exp(-12 * dt));
+      } else if (this.inWater) {
         v[1] -= GRAVITY * 0.2 * dt;
         if (input.jump) v[1] = Math.min(v[1] + 20 * dt, 3.2);
         v[1] = Math.max(v[1], -3);
@@ -114,33 +146,60 @@
       }
 
       // Перемещение мелкими шагами, чтобы не проходить сквозь блоки
-      const steps = Math.max(1, Math.ceil(Math.max(Math.abs(v[0]), Math.abs(v[1]), Math.abs(v[2])) * dt / 0.4));
+      const steps = Math.max(1, Math.ceil(Math.max(Math.abs(v[0]), Math.abs(v[1]), Math.abs(v[2])) * dt / 0.3));
       const sdt = dt / steps;
-      let hitH = false;
+      let hitH = false, stepped = false;
       const wasGround = this.onGround;
       this.onGround = false;
       for (let i = 0; i < steps; i++) {
         if (this.moveAxis(world, 1, v[1] * sdt)) {
-          if (v[1] < 0) this.onGround = true;
+          if (v[1] < 0) {
+            this.onGround = true;
+            if (this.flying && input.down) this.flying = false; // приземлились — полёт выключается
+          }
           v[1] = 0;
         }
-        if (this.moveAxis(world, 0, v[0] * sdt)) { hitH = true; v[0] = 0; }
-        if (this.moveAxis(world, 2, v[2] * sdt)) { hitH = true; v[2] = 0; }
+        const sx = p[0], sz = p[2];
+        const cx = this.moveAxis(world, 0, v[0] * sdt);
+        const cz = this.moveAxis(world, 2, v[2] * sdt);
+        if ((cx || cz) && (this.onGround || wasGround) && !this.flying) {
+          // Подъём на невысокую ступеньку (ступеньки, люки) без прыжка
+          const ax = p[0], ay = p[1], az = p[2];
+          let ok = false;
+          if (this.boxFree(world, sx, ay + STEP, sz)) {
+            p[0] = sx; p[2] = sz; p[1] = ay + STEP;
+            this.moveAxis(world, 0, v[0] * sdt);
+            this.moveAxis(world, 2, v[2] * sdt);
+            this.moveAxis(world, 1, -STEP);
+            ok = (p[0] - sx) ** 2 + (p[2] - sz) ** 2 > (ax - sx) ** 2 + (az - sz) ** 2 + 1e-8;
+          }
+          if (ok) { stepped = true; this.onGround = true; }
+          else {
+            p[0] = ax; p[1] = ay; p[2] = az;
+            if (cx) v[0] = 0;
+            if (cz) v[2] = 0;
+            hitH = true;
+          }
+        } else if (cx || cz) {
+          if (cx) v[0] = 0;
+          if (cz) v[2] = 0;
+          hitH = true;
+        }
       }
       if (!this.onGround && v[1] <= 0 && !this.boxFree(world, p[0], p[1] - 0.02, p[2])) this.onGround = true;
 
       // Автопрыжок на блок высотой 1
-      if (opts.autoJump && hitH && (this.onGround || wasGround) && len > 0.1 && !this.inWater) {
+      if (opts.autoJump && hitH && !stepped && (this.onGround || wasGround) && len > 0.1 && !this.inWater && !this.flying) {
         const nx = p[0] + tx * 0.12, nz = p[2] + tz * 0.12;
         if (this.boxFree(world, nx, p[1] + 1.05, nz) && this.boxFree(world, p[0], p[1] + 1.05, p[2])) {
           v[1] = JUMP_V;
           this.onGround = false;
         }
       }
-      if (this.inWater && hitH && len > 0.1) v[1] = Math.max(v[1], 3);
+      if (this.inWater && hitH && len > 0.1 && !this.flying) v[1] = Math.max(v[1], 3);
 
       // Урон от падения: больше 3 блоков — по полсердца за блок
-      if (this.inWater) this.fallTop = null;
+      if (this.inWater || this.flying) this.fallTop = null;
       else if (!this.onGround) {
         if (this.fallTop === null || p[1] > this.fallTop) this.fallTop = p[1];
       } else if (this.fallTop !== null) {

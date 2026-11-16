@@ -95,21 +95,34 @@ void main() {
   }
 
   // Вершины куба; tex — [верх, низ, бок]; xf — преобразование точки [0,1]^3
-  function cubeVerts(tex, xf, light) {
-    const out = new Float32Array(36 * 6);
+  // Вершины набора коробок (каждая [x0,y0,z0,x1,y1,z1] в [0,1]^3); tex — [верх, низ, бок];
+  // xf — преобразование точки; UV берутся по координатам грани, как в мире
+  function shapeVerts(boxes, tex, xf, light) {
+    const out = new Float32Array(boxes.length * 36 * 6);
     let o = 0;
-    for (const f of CUBE) {
+    CUBE.forEach((f, fi) => {
       const [u0, v0, st] = tileUV(tex[f.slot]);
-      const vs = f.c.map((p, k) => { const q = xf(p); return [q[0], q[1], q[2], u0 + QUAD_UV[k][0] * st, v0 + QUAD_UV[k][1] * st, f.shade * light]; });
-      for (const k of [0, 1, 2, 0, 2, 3]) { out.set(vs[k], o); o += 6; }
-    }
+      for (const b of boxes) {
+        const vs = f.c.map((c) => {
+          const p = [c[0] ? b[3] : b[0], c[1] ? b[4] : b[1], c[2] ? b[5] : b[2]];
+          let tu, tv;
+          if (fi < 2) { tu = p[2]; tv = 1 - p[1]; } else if (fi < 4) { tu = p[0]; tv = p[2]; } else { tu = p[0]; tv = 1 - p[1]; }
+          const q = xf(p);
+          return [q[0], q[1], q[2], u0 + tu * st, v0 + tv * st, f.shade * light];
+        });
+        for (const k of [0, 1, 2, 0, 2, 3]) { out.set(vs[k], o); o += 6; }
+      }
+    });
     return out;
   }
+  function cubeVerts(tex, xf, light) { return shapeVerts([[0, 0, 0, 1, 1, 1]], tex, xf, light); }
 
   class Renderer {
-    constructor(canvas) {
+    constructor(canvas, iconMode) {
       this.canvas = canvas;
-      const opts = { antialias: false, alpha: false, powerPreference: 'high-performance' };
+      const opts = iconMode
+        ? { antialias: true, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true }
+        : { antialias: false, alpha: false, powerPreference: 'high-performance' };
       const gl = canvas.getContext('webgl2', opts) || canvas.getContext('webgl', opts);
       if (!gl) throw new Error('WebGL не поддерживается');
       this.gl = gl;
@@ -173,8 +186,9 @@ void main() {
       if (ex.crack) {
         const { x, y, z, stage } = ex.crack;
         const t = CM.TILES['crack_' + stage];
-        const e = 0.004;
-        const v = cubeVerts([t, t, t], (p) => [x - e + p[0] * (1 + 2 * e), y - e + p[1] * (1 + 2 * e), z - e + p[2] * (1 + 2 * e)], 1);
+        const e = 0.004, bb = ex.crack.bounds || [0, 0, 0, 1, 1, 1];
+        const box = [[bb[0] - e, bb[1] - e, bb[2] - e, bb[3] + e, bb[4] + e, bb[5] + e]];
+        const v = shapeVerts(box, [t, t, t], (p) => [x + p[0], y + p[1], z + p[2]], 1);
         gl.enable(gl.BLEND); gl.depthMask(false); gl.disable(gl.CULL_FACE);
         gl.uniform1f(this.u.uAlphaTest, 0.01);
         this._drawDynamic(v, gl.TRIANGLES);
@@ -182,7 +196,9 @@ void main() {
       if (ex.selection) {
         const { x, y, z } = ex.selection;
         const e = 0.003, [u0, v0] = tileUV(CM.TILES.outline);
-        const P = (a, b, c) => [x - e + a * (1 + 2 * e), y - e + b * (1 + 2 * e), z - e + c * (1 + 2 * e), u0, v0, 0.55];
+        const bb = ex.selection.bounds || [0, 0, 0, 1, 1, 1];
+        const lerp = (a, i) => (a ? bb[i + 3] + e : bb[i] - e);
+        const P = (a, b, c) => [x + lerp(a, 0), y + lerp(b, 1), z + lerp(c, 2), u0, v0, 0.55];
         const L = [];
         for (let i = 0; i < 4; i++) {
           const a = i & 1, b = i >> 1;
@@ -209,20 +225,55 @@ void main() {
       gl.uniform1f(this.u.uFogNear, 100);
       gl.uniform1f(this.u.uFogFar, 200);
       const sw = Math.sin(hand.swing * Math.PI);
-      const ry = 0.75 - sw * 0.5, rx = 0.18 + sw * 0.6;
+      // hand.arm — пустая рука; иначе предмет (коробки + текстура)
+      const arm = !!hand.arm;
+      const scale = arm ? [0.24, 0.24, 0.95] : [0.62, 0.62, 0.62];
+      const ry = (arm ? -0.38 : 0.78) - sw * 0.45;
+      const rx = (arm ? 0.42 : 0.16) + sw * 0.7;
+      const px = (arm ? 0.6 : 0.66) + hand.bobX - sw * 0.25;
+      const py = (arm ? -0.56 : -0.6) + hand.bobY - sw * 0.12;
+      const pz = (arm ? -0.85 : -1.05) - sw * 0.2;
       const cyR = Math.cos(ry), syR = Math.sin(ry), cxR = Math.cos(rx), sxR = Math.sin(rx);
-      const size = 0.36;
-      const px = 0.64 + hand.bobX - sw * 0.2, py = -0.56 + hand.bobY - sw * 0.15, pz = -1.15 - sw * 0.15;
       const xf = (p) => {
-        let x = (p[0] - 0.5) * size, y = (p[1] - 0.5) * size, z = (p[2] - 0.5) * size;
-        let x1 = x * cyR + z * syR, z1 = -x * syR + z * cyR;
-        let y1 = y * cxR - z1 * sxR, z2 = y * sxR + z1 * cxR;
+        const x = (p[0] - 0.5) * scale[0], y = (p[1] - 0.5) * scale[1], z = (p[2] - 0.5) * scale[2];
+        const x1 = x * cyR + z * syR, z1 = -x * syR + z * cyR;
+        const y1 = y * cxR - z1 * sxR, z2 = y * sxR + z1 * cxR;
         return [x1 + px, y1 + py, z2 + pz];
+      };
+      const boxes = arm ? [[0, 0, 0, 1, 1, 1]] : hand.boxes;
+      const tex = arm ? [CM.TILES.skin, CM.TILES.skin, CM.TILES.skin] : hand.tex;
+      gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.uniform1f(this.u.uAlphaTest, 0.5);
+      this._drawDynamic(shapeVerts(boxes, tex, xf, hand.light), gl.TRIANGLES);
+    }
+
+    // Изометрическая иконка предмета (только для рендерера, созданного с iconMode)
+    drawIcon(boxes, tex) {
+      const gl = this.gl;
+      const w = this.canvas.width, h = this.canvas.height;
+      gl.viewport(0, 0, w, h);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.uniformMatrix4fv(this.u.uProj, false, IDENT);
+      gl.uniformMatrix4fv(this.u.uView, false, IDENT);
+      gl.uniform3f(this.u.uOffset, 0, 0, 0);
+      gl.uniform1f(this.u.uFogNear, 100);
+      gl.uniform1f(this.u.uFogFar, 200);
+      gl.uniform3fv(this.u.uFogColor, [0, 0, 0]);
+      const c45 = Math.SQRT1_2, c30 = Math.cos(Math.PI / 6), s30 = 0.5, S = 1.1;
+      const xf = (p) => {
+        const x = p[0] - 0.5, y = p[1] - 0.5, z = p[2] - 0.5;
+        const x1 = x * c45 + z * c45, z1 = -x * c45 + z * c45;
+        const y2 = y * c30 - z1 * s30, z2 = y * s30 + z1 * c30;
+        return [x1 * S, y2 * S, -z2 * 0.5];
       };
       gl.disable(gl.BLEND);
       gl.enable(gl.CULL_FACE);
+      gl.enable(gl.DEPTH_TEST);
       gl.uniform1f(this.u.uAlphaTest, 0.5);
-      this._drawDynamic(cubeVerts(hand.tex, xf, hand.light), gl.TRIANGLES);
+      this._drawDynamic(shapeVerts(boxes, tex, xf, 1), gl.TRIANGLES);
+      return this.canvas.toDataURL();
     }
 
     resize() {
