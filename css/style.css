@@ -379,26 +379,24 @@ html, body {
 #btn-inv:active { background: rgba(90,90,90,0.7); }
 .slot.empty-slot img { display: none; }
 
-/* ---- Экран инвентаря ---- */
+/* ---- Экран инвентаря, крафта, сундука и печи ---- */
 .inv-panel {
+  --is: min(calc((100vw - 96px) / 18.6), calc((100vh - 150px) / 4.3), 52px);
   background: #c6c6c6;
   border: 3px solid #111;
   box-shadow: inset 3px 3px 0 #fff, inset -3px -3px 0 #555;
-  padding: 10px 12px 12px;
-  max-width: 96vw;
-  max-height: 94vh;
-  display: flex; flex-direction: column; gap: 6px;
+  padding: 8px 12px 10px;
+  max-width: 98vw; max-height: 98vh;
+  display: flex; flex-direction: column; gap: 5px;
   color: #333;
 }
 .inv-head { display: flex; justify-content: space-between; align-items: center; font-size: clamp(10px, 2.2vmin, 14px); }
-.inv-close { font-family: var(--font); font-size: 12px; width: 34px; height: 30px; background: #8a8a8a; color: #fff; border: 2px solid #111; cursor: pointer; }
-.inv-panel { --is: clamp(30px, 8.2vmin, 48px); }
-.inv-grid {
-  display: grid; grid-template-columns: repeat(9, var(--is)); gap: 2px;
-  overflow-y: auto; max-height: calc(var(--is) * 3 + 8px);
-  touch-action: pan-y;
-}
-.inv-grid.catalog { max-height: calc(var(--is) * 3.5 + 8px); }
+.inv-close { font-family: var(--font); font-size: 12px; width: 36px; height: 28px; background: #8a8a8a; color: #fff; border: 2px solid #111; cursor: pointer; }
+.inv-body { display: flex; gap: 14px; align-items: flex-start; }
+.inv-col { display: flex; flex-direction: column; gap: 3px; }
+.inv-sub { font-size: clamp(7px, 1.6vmin, 10px); color: #555; height: 1.3em; }
+.inv-left { width: calc(var(--is) * 9 + 16px); height: calc(var(--is) * 4 + 12px); overflow-y: auto; touch-action: pan-y; }
+.inv-grid { display: grid; grid-template-columns: repeat(9, var(--is)); gap: 2px; }
 .inv-sep { height: 4px; }
 .islot {
   width: var(--is); height: var(--is);
@@ -409,7 +407,56 @@ html, body {
   cursor: pointer;
 }
 .islot img { width: 80%; height: 80%; image-rendering: pixelated; pointer-events: none; }
-.islot .cnt { position: absolute; right: 2px; bottom: 1px; font-size: 8px; color: #fff; text-shadow: 1px 1px 0 #000; pointer-events: none; }
+.islot img[src=""], .islot img:not([src]) { visibility: hidden; }
+.islot .cnt, .slot .cnt { position: absolute; right: 2px; bottom: 1px; font-size: 8px; color: #fff; text-shadow: 1px 1px 0 #000; pointer-events: none; }
+.islot .dur, .slot .dur { position: absolute; left: 12%; right: 12%; bottom: 3px; height: 3px; background: #111; pointer-events: none; display: none; }
+.islot .dur i, .slot .dur i { display: block; height: 100%; background: #4ad23a; }
 .islot.sel { background: #a8a8a8; outline: 3px solid #fff; outline-offset: -3px; }
 .islot.picked { background: #6f9c55; }
-.inv-help { width: 0; min-width: 100%; font-size: clamp(7px, 1.6vmin, 10px); color: #444; text-align: center; line-height: 1.6; }
+.inv-foot { display: flex; align-items: center; gap: 10px; min-height: 28px; }
+.inv-help { flex: 1; font-size: clamp(6px, 1.5vmin, 9px); color: #444; line-height: 1.5; }
+.inv-drop { font-family: var(--font); font-size: clamp(7px, 1.6vmin, 10px); padding: 7px 8px; background: #8a8a8a; color: #fff; border: 2px solid #111; cursor: pointer; }
+.inv-drop:disabled { opacity: 0.35; }
+
+/* Список рецептов */
+.recipe {
+  display: flex; align-items: center; gap: 6px;
+  min-height: calc(var(--is) + 2px);
+  padding: 2px 4px; margin-bottom: 2px;
+  background: #b4b4b4; border: 2px solid #777;
+  cursor: pointer;
+}
+.recipe img { width: calc(var(--is) * 0.78); height: calc(var(--is) * 0.78); image-rendering: pixelated; flex: none; pointer-events: none; }
+.recipe .rname { flex: 1; font-size: clamp(6px, 1.5vmin, 9px); line-height: 1.5; color: #222; pointer-events: none; }
+.recipe .rname b { font-weight: normal; color: #2b5a1c; }
+.recipe .rin { display: flex; gap: 6px; align-items: center; pointer-events: none; }
+.recipe .rin span { display: flex; align-items: center; font-size: 7px; color: #222; }
+.recipe .rin img { width: calc(var(--is) * 0.5); height: calc(var(--is) * 0.5); }
+.recipe.no { opacity: 0.45; }
+.recipe.no .rin span.miss { color: #a01818; }
+.recipe:not(.no):active { background: #9fd08a; }
+
+/* Печь */
+.furnace { display: flex; align-items: center; justify-content: center; gap: calc(var(--is) * 0.5); height: 100%; }
+.furnace .fcol { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.furnace .flame { width: calc(var(--is) * 0.6); height: calc(var(--is) * 0.6); background: #555; position: relative; overflow: hidden; clip-path: polygon(50% 0, 85% 45%, 100% 100%, 0 100%, 15% 45%); }
+.furnace .flame i { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#ffd23a, #e0541a); }
+.furnace .arrow { width: calc(var(--is) * 1.4); height: calc(var(--is) * 0.36); background: #777; position: relative; clip-path: polygon(0 25%, 70% 25%, 70% 0, 100% 50%, 70% 100%, 70% 75%, 0 75%); }
+.furnace .arrow i { position: absolute; left: 0; top: 0; bottom: 0; background: #fff; }
+.furnace .flabel { font-size: 7px; color: #555; }
+
+/* ---- Кнопка вида и экран сна ---- */
+#btn-view {
+  position: absolute;
+  right: calc(max(12px, env(safe-area-inset-right)) + clamp(40px, 8vmin, 56px) + 8px); top: max(12px, env(safe-area-inset-top));
+  width: clamp(40px, 8vmin, 56px); height: clamp(40px, 8vmin, 56px);
+  background: rgba(60,60,60,0.55);
+  border: 3px solid rgba(0,0,0,0.6);
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.25);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2; cursor: pointer;
+}
+#btn-view svg { width: 56%; height: 56%; fill: rgba(255,255,255,0.9); }
+#btn-view:active { background: rgba(30,30,30,0.7); }
+#sleep { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; transition: opacity 1s; z-index: 4; }
+#sleep.on { opacity: 1; }

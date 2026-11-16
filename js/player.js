@@ -5,11 +5,86 @@
   const GRAVITY = 30, JUMP_V = 8.6, WALK = 4.3, FLY = 9, STEP = 0.6;
   const EPS = 1e-4, GAP = 1e-5;
 
-  class Player {
-    constructor(name) {
-      this.name = name;
+  // Тело с коробкой столкновений: общий код для игрока, животных и выпавших предметов
+  class Body {
+    constructor(hw, h) {
+      this.hw = hw; this.h = h;
       this.pos = [0, 0, 0];   // позиция ног
       this.vel = [0, 0, 0];
+      this.onGround = false;
+    }
+
+    _forBoxes(world, min, max, fn) {
+      const x0 = Math.floor(min[0]), x1 = Math.floor(max[0]);
+      const y0 = Math.floor(min[1]), y1 = Math.floor(max[1]);
+      const z0 = Math.floor(min[2]), z1 = Math.floor(max[2]);
+      for (let by = y0; by <= y1; by++)
+        for (let bz = z0; bz <= z1; bz++)
+          for (let bx = x0; bx <= x1; bx++) {
+            const boxes = world.getBoxes(bx, by, bz);
+            if (!boxes) continue;
+            for (const b of boxes) fn(bx + b[0], by + b[1], bz + b[2], bx + b[3], by + b[4], bz + b[5]);
+          }
+    }
+
+    boxFree(world, x, y, z) {
+      const HALF_W = this.hw, HEIGHT = this.h;
+      const min = [x - HALF_W, y, z - HALF_W], max = [x + HALF_W, y + HEIGHT, z + HALF_W];
+      let free = true;
+      this._forBoxes(world, min, max, (ax, ay, az, bx, by, bz) => {
+        if (bx > min[0] + EPS && ax < max[0] - EPS && by > min[1] + EPS && ay < max[1] - EPS && bz > min[2] + EPS && az < max[2] - EPS) free = false;
+      });
+      return free;
+    }
+
+    // Сдвиг по одной оси с упором в коробки блоков. Возвращает true при столкновении.
+    moveAxis(world, axis, amount) {
+      if (amount === 0) return false;
+      const HALF_W = this.hw, HEIGHT = this.h;
+      const p = this.pos;
+      const min = [p[0] - HALF_W, p[1], p[2] - HALF_W], max = [p[0] + HALF_W, p[1] + HEIGHT, p[2] + HALF_W];
+      const smin = min.slice(), smax = max.slice();
+      if (amount > 0) smax[axis] += amount; else smin[axis] += amount;
+      let allowed = amount;
+      const lo = [0, 0, 0], hi = [0, 0, 0];
+      this._forBoxes(world, smin, smax, (ax, ay, az, bx, by, bz) => {
+        lo[0] = ax; lo[1] = ay; lo[2] = az; hi[0] = bx; hi[1] = by; hi[2] = bz;
+        for (let a = 0; a < 3; a++) {
+          if (a === axis) continue;
+          if (hi[a] <= min[a] + EPS || lo[a] >= max[a] - EPS) return;
+        }
+        if (amount > 0) { if (lo[axis] >= max[axis] - EPS) allowed = Math.min(allowed, lo[axis] - max[axis] - GAP); }
+        else if (hi[axis] <= min[axis] + EPS) allowed = Math.max(allowed, hi[axis] - min[axis] + GAP);
+      });
+      if (amount > 0) allowed = Math.max(0, allowed); else allowed = Math.min(0, allowed);
+      p[axis] += allowed;
+      return allowed !== amount;
+    }
+
+    // Простая физика: гравитация, плавучесть в воде, столкновения. Возвращает true, если упёрлись в стену.
+    simpleMove(dt, world, buoyancy) {
+      const p = this.pos, v = this.vel;
+      const inWater = world.getBlock(Math.floor(p[0]), Math.floor(p[1] + this.h * 0.4), Math.floor(p[2])) === CM.B.WATER;
+      this.inWater = inWater;
+      if (inWater) { v[1] += (buoyancy - v[1]) * Math.min(1, dt * 4); }
+      else v[1] = Math.max(-40, v[1] - GRAVITY * dt);
+      const steps = Math.max(1, Math.ceil(Math.max(Math.abs(v[0]), Math.abs(v[1]), Math.abs(v[2])) * dt / 0.3));
+      const sdt = dt / steps;
+      let hit = false;
+      this.onGround = false;
+      for (let i = 0; i < steps; i++) {
+        if (this.moveAxis(world, 1, v[1] * sdt)) { if (v[1] < 0) this.onGround = true; v[1] = 0; }
+        if (this.moveAxis(world, 0, v[0] * sdt)) hit = true;
+        if (this.moveAxis(world, 2, v[2] * sdt)) hit = true;
+      }
+      return hit;
+    }
+  }
+
+  class Player extends Body {
+    constructor(name) {
+      super(HALF_W, HEIGHT);
+      this.name = name;
       this.yaw = 0;           // 0 — взгляд вдоль -Z
       this.pitch = 0;
       this.onGround = false;
@@ -62,51 +137,6 @@
       return bx + 1 > p[0] - HALF_W && bx < p[0] + HALF_W &&
         by + 1 > p[1] && by < p[1] + HEIGHT &&
         bz + 1 > p[2] - HALF_W && bz < p[2] + HALF_W;
-    }
-
-    _forBoxes(world, min, max, fn) {
-      const x0 = Math.floor(min[0]), x1 = Math.floor(max[0]);
-      const y0 = Math.floor(min[1]), y1 = Math.floor(max[1]);
-      const z0 = Math.floor(min[2]), z1 = Math.floor(max[2]);
-      for (let by = y0; by <= y1; by++)
-        for (let bz = z0; bz <= z1; bz++)
-          for (let bx = x0; bx <= x1; bx++) {
-            const boxes = world.getBoxes(bx, by, bz);
-            if (!boxes) continue;
-            for (const b of boxes) fn(bx + b[0], by + b[1], bz + b[2], bx + b[3], by + b[4], bz + b[5]);
-          }
-    }
-
-    boxFree(world, x, y, z) {
-      const min = [x - HALF_W, y, z - HALF_W], max = [x + HALF_W, y + HEIGHT, z + HALF_W];
-      let free = true;
-      this._forBoxes(world, min, max, (ax, ay, az, bx, by, bz) => {
-        if (bx > min[0] + EPS && ax < max[0] - EPS && by > min[1] + EPS && ay < max[1] - EPS && bz > min[2] + EPS && az < max[2] - EPS) free = false;
-      });
-      return free;
-    }
-
-    // Сдвиг по одной оси с упором в коробки блоков. Возвращает true при столкновении.
-    moveAxis(world, axis, amount) {
-      if (amount === 0) return false;
-      const p = this.pos;
-      const min = [p[0] - HALF_W, p[1], p[2] - HALF_W], max = [p[0] + HALF_W, p[1] + HEIGHT, p[2] + HALF_W];
-      const smin = min.slice(), smax = max.slice();
-      if (amount > 0) smax[axis] += amount; else smin[axis] += amount;
-      let allowed = amount;
-      const lo = [0, 0, 0], hi = [0, 0, 0];
-      this._forBoxes(world, smin, smax, (ax, ay, az, bx, by, bz) => {
-        lo[0] = ax; lo[1] = ay; lo[2] = az; hi[0] = bx; hi[1] = by; hi[2] = bz;
-        for (let a = 0; a < 3; a++) {
-          if (a === axis) continue;
-          if (hi[a] <= min[a] + EPS || lo[a] >= max[a] - EPS) return;
-        }
-        if (amount > 0) { if (lo[axis] >= max[axis] - EPS) allowed = Math.min(allowed, lo[axis] - max[axis] - GAP); }
-        else if (hi[axis] <= min[axis] + EPS) allowed = Math.max(allowed, hi[axis] - min[axis] + GAP);
-      });
-      if (amount > 0) allowed = Math.max(0, allowed); else allowed = Math.min(0, allowed);
-      p[axis] += allowed;
-      return allowed !== amount;
     }
 
     // input: {forward, strafe, jump, down}; opts: {autoJump}
@@ -207,12 +237,6 @@
         this.fallTop = null;
         if (dist > 3.5) this.hurt(Math.floor(dist - 3));
       }
-      // Восстановление здоровья
-      if (this.health > 0 && this.health < 20) {
-        this.regen += dt;
-        if (this.regen > 3) { this.regen = 0; this.health++; }
-      }
-
       // Покачивание камеры при ходьбе
       const hs = Math.hypot(v[0], v[2]);
       if (this.onGround && hs > 0.5) this.bob += dt * hs * 2.2;
@@ -226,5 +250,6 @@
     }
   }
 
+  CM.Body = Body;
   CM.Player = Player;
 })(window.CM);

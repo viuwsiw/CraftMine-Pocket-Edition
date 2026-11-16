@@ -36,7 +36,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.0.1");
+        s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.0.2");
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient());
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);

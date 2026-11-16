@@ -1,26 +1,115 @@
 'use strict';
-// CraftMine PE — предметы, иконки и инвентарь
+// CraftMine PE — предметы, инструменты, рецепты, плавка, инвентарь
 (function (CM) {
-  const B = CM.B, BLOCKS = CM.BLOCKS;
+  const B = CM.B, I = CM.I, BLOCKS = CM.BLOCKS, T = CM.TILES;
   const MAX_STACK = 64;
 
-  // Каталог творческого режима (порядок в инвентаре)
-  const CATALOG = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.GRAVEL, B.SAND, B.BEDROCK,
-    B.LOG, B.BIRCH, B.PLANKS, B.LEAVES, B.GLASS, B.BRICKS,
-    B.OAK_STAIRS, B.COBBLE_STAIRS, B.DOOR, B.TRAPDOOR];
+  // ---------- Реестр предметов (не блоков) ----------
+  const ITEMS = {};
+  const item = (id, name, tile, extra) => { ITEMS[id] = Object.assign({ name, tile: T[tile], stack: MAX_STACK }, extra || {}); };
+  item(I.STICK, 'Палка', 'stick', { fuel: 5 });
+  item(I.COAL, 'Уголь', 'coal', { fuel: 80 });
+  item(I.IRON_INGOT, 'Железный слиток', 'iron_ingot');
+  item(I.GOLD_INGOT, 'Золотой слиток', 'gold_ingot');
+  item(I.DIAMOND, 'Алмаз', 'diamond');
+  item(I.PORK_RAW, 'Сырая свинина', 'pork_raw', { food: 3 });
+  item(I.PORK, 'Жареная свинина', 'pork_cooked', { food: 8 });
+  item(I.BEEF_RAW, 'Сырая говядина', 'beef_raw', { food: 3 });
+  item(I.BEEF, 'Стейк', 'beef_cooked', { food: 8 });
+  item(I.MUTTON_RAW, 'Сырая баранина', 'mutton_raw', { food: 2 });
+  item(I.MUTTON, 'Жареная баранина', 'mutton_cooked', { food: 6 });
+  item(I.CHICKEN_RAW, 'Сырая курятина', 'chicken_raw', { food: 2 });
+  item(I.CHICKEN, 'Жареная курятина', 'chicken_cooked', { food: 6 });
 
-  // Как предмет выглядит в руке и на иконке
+  // Инструменты: id = TOOL + материал*4 + тип
+  const MATS = [
+    { key: 'wood', f: 'Деревянная', m: 'Деревянный', tier: 1, speed: 2, dur: 59, bonus: 0, src: B.PLANKS, fuel: 10 },
+    { key: 'stone', f: 'Каменная', m: 'Каменный', tier: 2, speed: 4, dur: 131, bonus: 1, src: B.COBBLE },
+    { key: 'iron', f: 'Железная', m: 'Железный', tier: 3, speed: 6, dur: 250, bonus: 2, src: I.IRON_INGOT },
+    { key: 'gold', f: 'Золотая', m: 'Золотой', tier: 1, speed: 12, dur: 32, bonus: 0, src: I.GOLD_INGOT },
+    { key: 'diamond', f: 'Алмазная', m: 'Алмазный', tier: 4, speed: 8, dur: 1561, bonus: 3, src: I.DIAMOND },
+  ];
+  const TYPES = [
+    { key: 'pick', name: 'кирка', fem: true, dmg: 2, need: 3, sticks: 2 },
+    { key: 'axe', name: 'топор', fem: false, dmg: 3, need: 3, sticks: 2 },
+    { key: 'shovel', name: 'лопата', fem: true, dmg: 1, need: 1, sticks: 2 },
+    { key: 'sword', name: 'меч', fem: false, dmg: 4, need: 2, sticks: 1 },
+  ];
+  const toolId = (mat, type) => I.TOOL + mat * 4 + type;
+  MATS.forEach((m, mi) => TYPES.forEach((t, ti) => {
+    item(toolId(mi, ti), `${t.fem ? m.f : m.m} ${t.name}`, `${m.key}_${t.key}`, {
+      stack: 1, fuel: m.fuel,
+      tool: { type: t.key, tier: m.tier, speed: m.speed, dur: m.dur, dmg: t.dmg + m.bonus },
+    });
+  }));
+
+  // Топливо из блоков (секунды горения) и плавка
+  const BLOCK_FUEL = { [B.LOG]: 15, [B.BIRCH]: 15, [B.PLANKS]: 15, [B.CRAFTING]: 15, [B.CHEST]: 15, [B.OAK_STAIRS]: 15, [B.DOOR]: 10, [B.TRAPDOOR]: 15 };
+  const SMELT = {
+    [B.IRON_ORE]: I.IRON_INGOT, [B.GOLD_ORE]: I.GOLD_INGOT, [B.SAND]: B.GLASS, [B.COBBLE]: B.STONE,
+    [B.LOG]: I.COAL, [B.BIRCH]: I.COAL,
+    [I.PORK_RAW]: I.PORK, [I.BEEF_RAW]: I.BEEF, [I.MUTTON_RAW]: I.MUTTON, [I.CHICKEN_RAW]: I.CHICKEN,
+  };
+  const SMELT_TIME = 10;
+
+  // ---------- Рецепты ----------
+  // out: [id, количество]; in: [[id, количество], ...]; table — нужен верстак
+  const RECIPES = [
+    { out: [B.PLANKS, 4], in: [[B.LOG, 1]] },
+    { out: [B.PLANKS, 4], in: [[B.BIRCH, 1]] },
+    { out: [I.STICK, 4], in: [[B.PLANKS, 2]] },
+    { out: [B.CRAFTING, 1], in: [[B.PLANKS, 4]] },
+  ];
+  MATS.forEach((m, mi) => TYPES.forEach((t, ti) => {
+    RECIPES.push({ out: [toolId(mi, ti), 1], in: [[m.src, t.need], [I.STICK, t.sticks]], table: true });
+  }));
+  RECIPES.push(
+    { out: [B.FURNACE, 1], in: [[B.COBBLE, 8]], table: true },
+    { out: [B.CHEST, 1], in: [[B.PLANKS, 8]], table: true },
+    { out: [B.BED, 1], in: [[B.WOOL, 3], [B.PLANKS, 3]], table: true },
+    { out: [B.DOOR, 3], in: [[B.PLANKS, 6]], table: true },
+    { out: [B.TRAPDOOR, 2], in: [[B.PLANKS, 6]], table: true },
+    { out: [B.OAK_STAIRS, 4], in: [[B.PLANKS, 6]], table: true },
+    { out: [B.COBBLE_STAIRS, 4], in: [[B.COBBLE, 6]], table: true },
+  );
+
+  // ---------- Свойства ----------
+  const isBlock = (id) => id < 256;
+  const def = (id) => (isBlock(id) ? BLOCKS[id] : ITEMS[id]);
+  const name = (id) => { const d = def(id); return d ? d.name : '?'; };
+  const maxStack = (id) => (isBlock(id) ? MAX_STACK : ITEMS[id].stack);
+  const tool = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].tool || null : null);
+  const food = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].food || 0 : 0);
+  const fuel = (id) => (isBlock(id) ? BLOCK_FUEL[id] || 0 : (ITEMS[id] && ITEMS[id].fuel) || 0);
+  const sprite = (id) => (isBlock(id) ? null : ITEMS[id].tile);
+
+  // Как блок выглядит в руке, на земле и на иконке
   function itemShape(id) {
     const b = BLOCKS[id];
     if (b.kind === 'stairs') return { boxes: BLOCKS[id + 1].boxes, tex: b.tex };
     if (b.kind === 'trapdoor') return { boxes: [[0, 0.4, 0, 1, 0.4 + 3 / 16, 1]], tex: b.tex };
     if (b.kind === 'door') return { boxes: [[0.1, 0, 0.42, 0.9, 1, 0.58]], tex: b.tex };
+    if (b.kind === 'bed') return { boxes: [[0, 0.2, 0, 1, 0.2 + 9 / 16, 1]], tex: BLOCKS[id + 4].tex };
     return { boxes: CM.FULL_BOX, tex: b.tex };
   }
 
-  function name(id) { return BLOCKS[id] ? BLOCKS[id].name : '?'; }
+  // Скорость добычи блока предметом в руке: {time (сек), drops (bool)}
+  function mining(blockId, heldId) {
+    const b = BLOCKS[blockId], t = tool(heldId);
+    if (b.hard < 0) return { time: Infinity, drops: false };
+    const drops = !b.level || (!!t && t.type === 'pick' && t.tier >= b.level);
+    const speed = t && b.tool === t.type ? t.speed : 1;
+    return { time: Math.max(0.05, b.hard * (drops ? 1.5 : 5) / speed), drops };
+  }
 
-  // ---- Иконки: рисуются один раз отдельным маленьким WebGL-контекстом ----
+  // ---------- Каталог творческого режима ----------
+  const CATALOG = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.GRAVEL, B.SAND, B.BEDROCK,
+    B.LOG, B.BIRCH, B.PLANKS, B.LEAVES, B.GLASS, B.BRICKS, B.WOOL,
+    B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE,
+    B.OAK_STAIRS, B.COBBLE_STAIRS, B.DOOR, B.TRAPDOOR, B.CRAFTING, B.FURNACE, B.CHEST, B.BED,
+    ...Object.keys(ITEMS).map(Number)];
+
+  // ---------- Иконки ----------
   const icons = {};
   function buildIcons() {
     const canvas = document.createElement('canvas');
@@ -28,6 +117,7 @@
     let r = null;
     try { r = new CM.Renderer(canvas, true); } catch (e) { r = null; }
     for (const id of CATALOG) {
+      if (!isBlock(id)) { icons[id] = spriteIcon(ITEMS[id].tile); continue; }
       const b = BLOCKS[id];
       if (b.kind === 'door') { icons[id] = doorIcon(); continue; }
       const sh = itemShape(id);
@@ -38,45 +128,79 @@
       if (ext) ext.loseContext();
     }
   }
+  function spriteIcon(tile) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 48;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    const TS = CM.Textures.tile, per = CM.Textures.perRow;
+    g.drawImage(CM.Textures.atlas, (tile % per) * TS, Math.floor(tile / per) * TS, TS, TS, 0, 0, 48, 48);
+    return c.toDataURL();
+  }
   // Дверь в инвентаре — плоская картинка из двух половинок
   function doorIcon() {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
-    const a = CM.Textures.atlas, T = CM.Textures.tile, per = CM.Textures.perRow;
-    const draw = (tile, y) => g.drawImage(a, (tile % per) * T, Math.floor(tile / per) * T, T, T, 16, y, 32, 32);
-    draw(CM.TILES.door_top, 0);
-    draw(CM.TILES.door_bottom, 32);
+    const a = CM.Textures.atlas, TS = CM.Textures.tile, per = CM.Textures.perRow;
+    const draw = (tile, y) => g.drawImage(a, (tile % per) * TS, Math.floor(tile / per) * TS, TS, TS, 16, y, 32, 32);
+    draw(T.door_top, 0);
+    draw(T.door_bottom, 32);
     return c.toDataURL();
   }
   function icon(id) { return icons[id] || ''; }
 
-  // ---- Инвентарь: 36 ячеек, 0–8 — панель быстрого доступа ----
+  // ---------- Перекладывание между ячейками (инвентарь, сундук, печь) ----------
+  function moveSlot(fromArr, fi, toArr, ti) {
+    if (fromArr === toArr && fi === ti) return;
+    const a = fromArr[fi], b = toArr[ti];
+    if (a && b && a.id === b.id && maxStack(a.id) > 1) {
+      const n = Math.min(a.count, maxStack(a.id) - b.count);
+      b.count += n; a.count -= n;
+      if (a.count <= 0) fromArr[fi] = null;
+      return;
+    }
+    fromArr[fi] = b; toArr[ti] = a;
+  }
+
+  // ---------- Инвентарь: 36 ячеек, 0–8 — панель быстрого доступа ----------
   class Inventory {
     constructor(slots) {
       this.slots = new Array(36).fill(null);
-      if (slots) slots.forEach((s, i) => { if (s && i < 36 && BLOCKS[s[0]]) this.slots[i] = { id: s[0], count: s[1] }; });
+      if (slots) slots.forEach((s, i) => {
+        if (s && i < 36 && def(s[0])) this.slots[i] = { id: s[0], count: s[1], dur: s[2] };
+      });
     }
 
-    toJSON() { return this.slots.map((s) => (s ? [s.id, s.count] : 0)); }
+    toJSON() { return this.slots.map((s) => (s ? (s.dur === undefined ? [s.id, s.count] : [s.id, s.count, s.dur]) : 0)); }
 
     // Положить предметы; вернуть, сколько не влезло
-    add(id, count) {
-      for (const s of this.slots) {
-        if (count <= 0) break;
-        if (s && s.id === id && s.count < MAX_STACK) {
-          const n = Math.min(count, MAX_STACK - s.count);
-          s.count += n; count -= n;
+    add(id, count, dur) {
+      const max = maxStack(id);
+      if (max > 1) {
+        for (const s of this.slots) {
+          if (count <= 0) break;
+          if (s && s.id === id && s.count < max) { const n = Math.min(count, max - s.count); s.count += n; count -= n; }
         }
       }
       for (let i = 0; i < 36 && count > 0; i++) {
         if (!this.slots[i]) {
-          const n = Math.min(count, MAX_STACK);
-          this.slots[i] = { id, count: n }; count -= n;
+          const n = Math.min(count, max);
+          this.slots[i] = { id, count: n, dur };
+          count -= n;
         }
       }
       return count;
+    }
+
+    count(id) { let n = 0; for (const s of this.slots) if (s && s.id === id) n += s.count; return n; }
+
+    remove(id, n) {
+      for (let i = 35; i >= 0 && n > 0; i--) {
+        const s = this.slots[i];
+        if (s && s.id === id) { const k = Math.min(n, s.count); s.count -= k; n -= k; if (s.count <= 0) this.slots[i] = null; }
+      }
     }
 
     takeOne(i) {
@@ -85,26 +209,16 @@
       if (--s.count <= 0) this.slots[i] = null;
     }
 
-    // Переложить: обмен ячеек или объединение одинаковых стопок
-    move(from, to) {
-      if (from === to) return;
-      const a = this.slots[from], b = this.slots[to];
-      if (a && b && a.id === b.id) {
-        const n = Math.min(a.count, MAX_STACK - b.count);
-        b.count += n; a.count -= n;
-        if (a.count <= 0) this.slots[from] = null;
-        return;
-      }
-      this.slots[from] = b; this.slots[to] = a;
-    }
+    canCraft(r) { return r.in.every(([id, n]) => this.count(id) >= n); }
 
     static creativeDefault() {
       const inv = new Inventory();
-      [B.STONE, B.COBBLE, B.DIRT, B.PLANKS, B.LOG, B.GLASS, B.DOOR, B.TRAPDOOR, B.OAK_STAIRS]
+      [B.STONE, B.COBBLE, B.PLANKS, B.GLASS, B.DOOR, B.CRAFTING, B.FURNACE, B.CHEST, B.BED]
         .forEach((id, i) => { inv.slots[i] = { id, count: 1 }; });
       return inv;
     }
   }
 
-  CM.Items = { CATALOG, MAX_STACK, itemShape, name, icon, buildIcons, Inventory };
+  CM.Items = { CATALOG, MAX_STACK, RECIPES, SMELT, SMELT_TIME, ITEMS, isBlock, name, maxStack, tool, food, fuel, sprite,
+    itemShape, mining, icon, buildIcons, moveSlot, toolId, Inventory };
 })(window.CM);

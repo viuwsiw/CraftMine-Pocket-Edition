@@ -26,13 +26,34 @@
   BLOCKS[B.BIRCH] = { name: 'Берёза', solid: true, opaque: true, tex: [T.birch_top, T.birch_top, T.birch_side] };
   BLOCKS[B.BRICKS] = { name: 'Кирпичи', solid: true, opaque: true, tex: [T.bricks, T.bricks, T.bricks] };
 
-  // Время ломания в секундах (0 — нельзя сломать)
-  const HARD = { [B.GRASS]: 0.45, [B.DIRT]: 0.4, [B.SAND]: 0.4, [B.GRAVEL]: 0.45, [B.LEAVES]: 0.2, [B.GLASS]: 0.3,
-    [B.LOG]: 0.8, [B.BIRCH]: 0.8, [B.PLANKS]: 0.75, [B.STONE]: 1.0, [B.COBBLE]: 1.1, [B.BRICKS]: 1.1, [B.BEDROCK]: 0 };
-  BLOCKS.forEach((b, i) => { b.hardness = HARD[i] === undefined ? 0.5 : HARD[i]; });
+  // Предметы, которые не являются блоками (id >= 256)
+  const I = { STICK: 256, COAL: 257, IRON_INGOT: 258, GOLD_INGOT: 259, DIAMOND: 260,
+    PORK_RAW: 261, PORK: 262, BEEF_RAW: 263, BEEF: 264, MUTTON_RAW: 265, MUTTON: 266, CHICKEN_RAW: 267, CHICKEN: 268,
+    TOOL: 272 }; // инструменты: TOOL + материал*4 + тип (кирка, топор, лопата, меч)
+
+  Object.assign(B, { COAL_ORE: 15, IRON_ORE: 16, GOLD_ORE: 17, DIAMOND_ORE: 18, CRAFTING: 19, FURNACE: 20, CHEST: 24, WOOL: 28, BED: 64 });
+  const ore = (name, t) => ({ name, solid: true, opaque: true, tex: [t, t, t] });
+  BLOCKS[B.COAL_ORE] = ore('Угольная руда', T.coal_ore);
+  BLOCKS[B.IRON_ORE] = ore('Железная руда', T.iron_ore);
+  BLOCKS[B.GOLD_ORE] = ore('Золотая руда', T.gold_ore);
+  BLOCKS[B.DIAMOND_ORE] = ore('Алмазная руда', T.diamond_ore);
+  BLOCKS[B.CRAFTING] = { name: 'Верстак', solid: true, opaque: true, kind: 'crafting', tex: [T.craft_top, T.planks, T.craft_side] };
+  BLOCKS[B.WOOL] = { name: 'Шерсть', solid: true, opaque: true, tex: [T.wool, T.wool, T.wool] };
+
+  // Прочность (как в Minecraft), нужный инструмент и минимальный уровень кирки для добычи
+  // [прочность, инструмент, уровень]: уровень 1 — дерево/золото, 2 — камень, 3 — железо, 4 — алмаз
+  const MINE = {
+    [B.GRASS]: [0.6, 'shovel'], [B.DIRT]: [0.5, 'shovel'], [B.SAND]: [0.5, 'shovel'], [B.GRAVEL]: [0.6, 'shovel'],
+    [B.STONE]: [1.5, 'pick', 1], [B.COBBLE]: [2, 'pick', 1], [B.BRICKS]: [2, 'pick', 1],
+    [B.COAL_ORE]: [3, 'pick', 1], [B.IRON_ORE]: [3, 'pick', 2], [B.GOLD_ORE]: [3, 'pick', 3], [B.DIAMOND_ORE]: [3, 'pick', 3],
+    [B.LOG]: [2, 'axe'], [B.BIRCH]: [2, 'axe'], [B.PLANKS]: [2, 'axe'], [B.CRAFTING]: [2.5, 'axe'],
+    [B.LEAVES]: [0.2], [B.GLASS]: [0.3], [B.WOOL]: [0.8], [B.BEDROCK]: [-1],
+  };
+  BLOCKS.forEach((b, i) => { const m = MINE[i] || [0.5]; b.hard = m[0]; b.tool = m[1] || null; b.level = m[2] || 0; });
 
   // Что выпадает при ломании в выживании (0 — ничего)
-  const DROP = { [B.GRASS]: B.DIRT, [B.STONE]: B.COBBLE, [B.LEAVES]: 0, [B.GLASS]: 0, [B.WATER]: 0, [B.BEDROCK]: 0 };
+  const DROP = { [B.GRASS]: B.DIRT, [B.STONE]: B.COBBLE, [B.LEAVES]: 0, [B.GLASS]: 0, [B.WATER]: 0, [B.BEDROCK]: 0,
+    [B.COAL_ORE]: I.COAL, [B.DIAMOND_ORE]: I.DIAMOND };
   BLOCKS.forEach((b, i) => { b.item = DROP[i] === undefined ? i : DROP[i]; });
 
   // ---- Блоки сложной формы: ступеньки, люки, двери ----
@@ -43,17 +64,33 @@
   B.OAK_STAIRS = 32; B.COBBLE_STAIRS = 36; B.TRAPDOOR = 40; B.DOOR = 48;
   for (let f = 0; f < 4; f++) {
     BLOCKS[B.OAK_STAIRS + f] = { name: 'Деревянные ступеньки', solid: true, opaque: false, kind: 'stairs', facing: f,
-      tex: [T.planks, T.planks, T.planks], boxes: [[0, 0, 0, 1, 0.5, 1], STAIR_TOP[f]], item: B.OAK_STAIRS, hardness: 0.75 };
+      tex: [T.planks, T.planks, T.planks], boxes: [[0, 0, 0, 1, 0.5, 1], STAIR_TOP[f]], item: B.OAK_STAIRS, hard: 2, tool: 'axe', level: 0 };
     BLOCKS[B.COBBLE_STAIRS + f] = { name: 'Каменные ступеньки', solid: true, opaque: false, kind: 'stairs', facing: f,
-      tex: [T.cobblestone, T.cobblestone, T.cobblestone], boxes: [[0, 0, 0, 1, 0.5, 1], STAIR_TOP[f]], item: B.COBBLE_STAIRS, hardness: 1.1 };
+      tex: [T.cobblestone, T.cobblestone, T.cobblestone], boxes: [[0, 0, 0, 1, 0.5, 1], STAIR_TOP[f]], item: B.COBBLE_STAIRS, hard: 2, tool: 'pick', level: 1 };
     for (let o = 0; o < 2; o++) {
       BLOCKS[B.TRAPDOOR + f + 4 * o] = { name: 'Люк', solid: true, opaque: false, kind: 'trapdoor', facing: f, open: o,
-        tex: [T.trapdoor, T.trapdoor, T.trapdoor], boxes: [o ? SIDE[f] : [0, 0, 0, 1, TH, 1]], item: B.TRAPDOOR, hardness: 0.6 };
+        tex: [T.trapdoor, T.trapdoor, T.trapdoor], boxes: [o ? SIDE[f] : [0, 0, 0, 1, TH, 1]], item: B.TRAPDOOR, hard: 3, tool: 'axe', level: 0 };
       for (let u = 0; u < 2; u++) {
         const t = u ? T.door_top : T.door_bottom;
         BLOCKS[B.DOOR + f + 4 * o + 8 * u] = { name: 'Дверь', solid: true, opaque: false, kind: 'door', facing: f, open: o, upper: u,
-          tex: [t, t, t], boxes: [SIDE[o ? (f + 3) % 4 : (f + 2) % 4]], item: B.DOOR, hardness: 0.6 };
+          tex: [t, t, t], boxes: [SIDE[o ? (f + 3) % 4 : (f + 2) % 4]], item: B.DOOR, hard: 3, tool: 'axe', level: 0 };
       }
+    }
+  }
+  // Печь и сундук: куб с «лицом», повёрнутым к игроку. Грани: +X, -X, +Y, -Y, +Z, -Z
+  const DIRFACE = [5, 0, 4, 1]; // направление f -> индекс грани
+  const DIRVEC = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // направление f -> (dx, dz)
+  const faced = (front, side, top, f) => { const t = [side, side, top, top, side, side]; t[DIRFACE[(f + 2) % 4]] = front; return t; };
+  for (let f = 0; f < 4; f++) {
+    BLOCKS[B.FURNACE + f] = { name: 'Печь', solid: true, opaque: true, kind: 'furnace', facing: f,
+      tex: faced(T.furnace_front, T.furnace_side, T.furnace_top, f), item: B.FURNACE, hard: 3.5, tool: 'pick', level: 1 };
+    BLOCKS[B.CHEST + f] = { name: 'Сундук', solid: true, opaque: true, kind: 'chest', facing: f,
+      tex: faced(T.chest_front, T.chest_side, T.chest_top, f), item: B.CHEST, hard: 2.5, tool: 'axe', level: 0 };
+    // Кровать: две половинки, изголовье — дальняя от игрока
+    for (let h = 0; h < 2; h++) {
+      const side = h ? T.bed_side_head : T.bed_side_foot;
+      BLOCKS[B.BED + f + 4 * h] = { name: 'Кровать', solid: true, opaque: false, kind: 'bed', facing: f, head: h,
+        tex: [h ? T.bed_top_head : T.bed_top_foot, T.planks, side], boxes: [[0, 0, 0, 1, 9 / 16, 1]], item: B.BED, hard: 0.2, tool: null, level: 0 };
     }
   }
   const FULL_BOX = [[0, 0, 0, 1, 1, 1]];
@@ -157,6 +194,25 @@
           }
           if (top > maxY) maxY = top;
         }
+      }
+
+      // Руды: жилы внутри камня, чем ценнее — тем глубже и реже
+      if (!flat) {
+        const r = CM.mulberry32((Math.imul(ch.cx, 73856093) ^ Math.imul(ch.cz, 19349663) ^ seed) | 0);
+        const vein = (id, count, size, yMin, yMax) => {
+          for (let n = 0; n < count; n++) {
+            let x = Math.floor(r() * CS), z = Math.floor(r() * CS), y = yMin + Math.floor(r() * (yMax - yMin));
+            for (let k = 0; k < size; k++) {
+              if (x >= 0 && z >= 0 && x < CS && z < CS && y > 0 && y < H && data[idx(x, y, z)] === B.STONE) data[idx(x, y, z)] = id;
+              const a = Math.floor(r() * 3), d = r() < 0.5 ? -1 : 1;
+              if (a === 0) x += d; else if (a === 1) y += d; else z += d;
+            }
+          }
+        };
+        vein(B.COAL_ORE, 14, 9, 4, 72);
+        vein(B.IRON_ORE, 10, 6, 4, 48);
+        vein(B.GOLD_ORE, 2, 6, 2, 22);
+        vein(B.DIAMOND_ORE, 1, 5, 2, 13);
       }
 
       // Деревья: проверяем колонки с запасом 2 блока, чтобы кроны переходили через границы чанков
@@ -305,7 +361,7 @@
             else visible = !OPAQUE[nid] && (nid !== id || id === B.LEAVES);
             if (!visible) continue;
 
-            const tile = blk.tex[F.texSlot];
+            const tile = blk.tex.length === 6 ? blk.tex[f] : blk.tex[F.texSlot];
             const u0 = (tile % CM.Textures.perRow) * tileStep, v0 = Math.floor(tile / CM.Textures.perRow) * tileStep;
 
             for (let k = 0; k < 4; k++) {
@@ -367,7 +423,19 @@
       this.offsetsR = -1;
       this.frame = 0;
       this.edits = new Map(); // ключ чанка -> Map(индекс -> id)
+      this.tiles = new Map();
     }
+
+    // Содержимое сундуков и печей: ключ "x,y,z"
+    tile(x, y, z, make) {
+      const k = x + ',' + y + ',' + z;
+      let t = this.tiles.get(k);
+      if (!t && make) { t = make(); this.tiles.set(k, t); }
+      return t;
+    }
+    removeTile(x, y, z) { const k = x + ',' + y + ',' + z; const t = this.tiles.get(k); this.tiles.delete(k); return t; }
+    importTiles(obj) { for (const k in obj || {}) this.tiles.set(k, obj[k]); }
+    exportTiles() { const o = {}; for (const [k, t] of this.tiles) o[k] = t; return o; }
 
     importEdits(obj) {
       for (const k in obj || {}) {
@@ -434,9 +502,9 @@
         const id = this.getBlock(x, y, z);
         if (id !== B.AIR && id !== B.WATER) {
           const bl = BLOCKS[id];
-          if (!bl.boxes) return { x, y, z, n, id, bounds: FULL_BOX[0] };
+          if (!bl.boxes) return { x, y, z, n, id, bounds: FULL_BOX[0], t };
           const h = rayBoxes(o, d, x, y, z, bl.boxes);
-          if (h && h.t <= maxDist) return { x, y, z, n: h.n, id, bounds: bl.bounds };
+          if (h && h.t <= maxDist) return { x, y, z, n: h.n, id, bounds: bl.bounds, t: h.t };
         }
         if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; n = [-sx, 0, 0]; }
         else if (ty < tz) { y += sy; t = ty; ty += tdy; n = [0, -sy, 0]; }
@@ -600,6 +668,6 @@
   }
 
   CM.CS = CS; CM.H = H; CM.SEA = SEA;
-  CM.B = B; CM.BLOCKS = BLOCKS; CM.SOLID = SOLID; CM.OPAQUE = OPAQUE; CM.FULL_BOX = FULL_BOX;
+  CM.B = B; CM.BLOCKS = BLOCKS; CM.SOLID = SOLID; CM.OPAQUE = OPAQUE; CM.FULL_BOX = FULL_BOX; CM.I = I; CM.DIRVEC = DIRVEC;
   CM.World = World;
 })(window.CM);

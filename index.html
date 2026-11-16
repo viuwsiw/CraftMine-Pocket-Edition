@@ -18,7 +18,7 @@
     <div class="logo-wrap">
       <h1 class="logo">CraftMine</h1>
       <div class="subtitle">Pocket Edition</div>
-      <div class="version-top">v0.0.1 alpha</div>
+      <div class="version-top">v0.0.2 alpha</div>
     </div>
     <div class="tiles">
       <button class="tile locked" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""><span class="tile-badge">скоро</span></button>
@@ -114,6 +114,8 @@
     </div>
     <div id="debug" class="hidden"></div>
     <button id="btn-pause" aria-label="Пауза"><i></i><i></i></button>
+    <button id="btn-view" aria-label="Вид от третьего лица"><svg viewBox="0 0 16 16"><circle cx="8" cy="4.2" r="2.6"/><rect x="4.5" y="7.6" width="7" height="7" rx="1"/></svg></button>
+    <div id="sleep"></div>
     <div id="dpad">
       <div class="dp diag" data-dir="ul"></div>
       <div class="dp" data-dir="up"><svg viewBox="0 0 10 10"><path d="M5 2 L9 7 L1 7 Z"/></svg></div>
@@ -138,21 +140,30 @@
     </div>
   </section>
 
-  <!-- Инвентарь -->
+  <!-- Инвентарь, крафт, сундук, печь -->
   <section id="screen-inv" class="screen dim-bg hidden">
     <div class="inv-panel">
       <div class="inv-head"><span id="inv-title">Инвентарь</span><button class="inv-close" id="btn-inv-close" aria-label="Закрыть">✕</button></div>
-      <div class="inv-grid" id="inv-grid"></div>
-      <div class="inv-sep"></div>
-      <div class="inv-grid hb" id="inv-hotbar"></div>
-      <div class="inv-help" id="inv-help"></div>
+      <div class="inv-body">
+        <div class="inv-col">
+          <div class="inv-sub" id="inv-left-title"></div>
+          <div class="inv-left" id="inv-left"></div>
+        </div>
+        <div class="inv-col">
+          <div class="inv-sub">Nikita</div>
+          <div class="inv-grid" id="inv-grid"></div>
+          <div class="inv-sep"></div>
+          <div class="inv-grid hb" id="inv-hotbar"></div>
+        </div>
+      </div>
+      <div class="inv-foot"><span class="inv-help" id="inv-help"></span><button class="inv-drop" id="btn-drop">Выбросить</button></div>
     </div>
   </section>
 
   <!-- Смерть -->
   <section id="screen-dead" class="screen dead-bg hidden">
     <div class="dead-title">Вы погибли!</div>
-    <div class="pause-info">Nikita упал с большой высоты</div>
+    <div class="pause-info">Вещи остались на месте гибели</div>
     <div class="menu-buttons">
       <button class="btn big" id="btn-respawn">Возродиться</button>
       <button class="btn" id="btn-dead-quit">Выйти в меню</button>
@@ -164,10 +175,12 @@
 
   <script src="js/noise.js"></script>
   <script src="js/textures.js"></script>
+  <script src="js/sprites.js"></script>
   <script src="js/world.js"></script>
   <script src="js/renderer.js"></script>
   <script src="js/player.js"></script>
   <script src="js/items.js"></script>
+  <script src="js/entities.js"></script>
   <script src="js/controls.js"></script>
   <script src="js/main.js"></script>
 </body>

@@ -26,13 +26,14 @@ precision mediump float;
 uniform sampler2D uTex;
 uniform vec3 uFogColor;
 uniform float uAlphaTest;
+uniform vec3 uTint;
 varying vec2 vUV;
 varying float vLight;
 varying float vFog;
 void main() {
   vec4 c = texture2D(uTex, vUV);
   if (c.a < uAlphaTest) discard;
-  gl_FragColor = vec4(mix(c.rgb * vLight, uFogColor, vFog), c.a);
+  gl_FragColor = vec4(mix(c.rgb * vLight * uTint, uFogColor, vFog), c.a);
 }`;
 
   // ---- матрицы (column-major) ----
@@ -101,7 +102,7 @@ void main() {
     const out = new Float32Array(boxes.length * 36 * 6);
     let o = 0;
     CUBE.forEach((f, fi) => {
-      const [u0, v0, st] = tileUV(tex[f.slot]);
+      const [u0, v0, st] = tileUV(tex.length === 6 ? tex[fi] : tex[f.slot]);
       for (const b of boxes) {
         const vs = f.c.map((c) => {
           const p = [c[0] ? b[3] : b[0], c[1] ? b[4] : b[1], c[2] ? b[5] : b[2]];
@@ -116,6 +117,20 @@ void main() {
     return out;
   }
   function cubeVerts(tex, xf, light) { return shapeVerts([[0, 0, 0, 1, 1, 1]], tex, xf, light); }
+
+  // Деталь модели: коробка с центром c и размером sz, на каждую грань — целый тайл.
+  // tiles: [+X, -X, верх, низ, +Z (зад), -Z (перёд)]; xf — преобразование точки; пишет в массив out
+  function partVerts(out, c, sz, tiles, xf, light) {
+    CUBE.forEach((f, fi) => {
+      const [u0, v0, st] = tileUV(tiles[fi]);
+      const vs = f.c.map((k, i) => {
+        const q = xf([c[0] + (k[0] - 0.5) * sz[0], c[1] + (k[1] - 0.5) * sz[1], c[2] + (k[2] - 0.5) * sz[2]]);
+        return [q[0], q[1], q[2], u0 + QUAD_UV[i][0] * st, v0 + QUAD_UV[i][1] * st, f.shade * light];
+      });
+      for (const k of [0, 1, 2, 0, 2, 3]) for (let e = 0; e < 6; e++) out.push(vs[k][e]);
+    });
+  }
+  CM.Geo = { shapeVerts, partVerts, tileUV };
 
   class Renderer {
     constructor(canvas, iconMode) {
@@ -147,7 +162,7 @@ void main() {
         light: gl.getAttribLocation(prog, 'aLight'),
       };
       this.u = {};
-      for (const n of ['uProj', 'uView', 'uOffset', 'uFogNear', 'uFogFar', 'uTex', 'uFogColor', 'uAlphaTest'])
+      for (const n of ['uProj', 'uView', 'uOffset', 'uFogNear', 'uFogFar', 'uTex', 'uFogColor', 'uAlphaTest', 'uTint'])
         this.u[n] = gl.getUniformLocation(prog, n);
       gl.enableVertexAttribArray(this.a.pos);
       gl.enableVertexAttribArray(this.a.uv);
@@ -163,6 +178,7 @@ void main() {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       gl.uniform1i(this.u.uTex, 0);
+      gl.uniform3f(this.u.uTint, 1, 1, 1);
 
       gl.enable(gl.DEPTH_TEST);
       gl.depthFunc(gl.LEQUAL);
@@ -225,27 +241,61 @@ void main() {
       gl.uniform1f(this.u.uFogNear, 100);
       gl.uniform1f(this.u.uFogFar, 200);
       const sw = Math.sin(hand.swing * Math.PI);
-      // hand.arm — пустая рука; иначе предмет (коробки + текстура)
-      const arm = !!hand.arm;
-      const scale = arm ? [0.24, 0.24, 0.95] : [0.62, 0.62, 0.62];
-      const ry = (arm ? -0.38 : 0.78) - sw * 0.45;
-      const rx = (arm ? 0.42 : 0.16) + sw * 0.7;
-      const px = (arm ? 0.6 : 0.66) + hand.bobX - sw * 0.25;
-      const py = (arm ? -0.56 : -0.6) + hand.bobY - sw * 0.12;
-      const pz = (arm ? -0.85 : -1.05) - sw * 0.2;
+      // Три вида: пустая рука (arm), плоский предмет (sprite), блок (boxes + tex)
+      const arm = !!hand.arm, sprite = hand.sprite !== undefined && hand.sprite !== null;
+      let scale, pre, ry, rx, px, py, pz;
+      if (arm) { scale = [0.36, 1.25, 0.36]; pre = 2.05; ry = 0.42; rx = -0.1; px = 0.74; py = -0.66; pz = -0.98; }
+      else if (sprite) { scale = [0.95, 0.95, 0.95]; pre = 0; ry = 2.05; rx = -0.2; px = 0.62; py = -0.3; pz = -1.05; }
+      else { scale = [0.62, 0.62, 0.62]; pre = 0; ry = 0.78; rx = 0.16; px = 0.66; py = -0.6; pz = -1.05; }
+      ry -= sw * 0.45; rx += sw * 0.7; px += hand.bobX - sw * 0.25; py += hand.bobY - sw * 0.12; pz -= sw * 0.2;
+      const cp = Math.cos(pre), sp = Math.sin(pre);
       const cyR = Math.cos(ry), syR = Math.sin(ry), cxR = Math.cos(rx), sxR = Math.sin(rx);
       const xf = (p) => {
-        const x = (p[0] - 0.5) * scale[0], y = (p[1] - 0.5) * scale[1], z = (p[2] - 0.5) * scale[2];
+        let x = (p[0] - 0.5) * scale[0], y = (p[1] - 0.5) * scale[1], z = (p[2] - 0.5) * scale[2];
+        const y0 = y * cp - z * sp, z0 = y * sp + z * cp; y = y0; z = z0;
         const x1 = x * cyR + z * syR, z1 = -x * syR + z * cyR;
         const y1 = y * cxR - z1 * sxR, z2 = y * sxR + z1 * cxR;
         return [x1 + px, y1 + py, z2 + pz];
       };
-      const boxes = arm ? [[0, 0, 0, 1, 1, 1]] : hand.boxes;
-      const tex = arm ? [CM.TILES.skin, CM.TILES.skin, CM.TILES.skin] : hand.tex;
+      let boxes, tex, light = hand.light;
+      if (arm) { boxes = [[0, 0, 0, 1, 1, 1]]; const a = CM.TILES.pl_arm; tex = [a, a, CM.TILES.pl_body, CM.TILES.skin, a, a]; }
+      else if (sprite) { boxes = [[0, 0, 0.5, 1, 1, 0.5]]; tex = [hand.sprite, hand.sprite, hand.sprite]; light /= 0.65; }
+      else { boxes = hand.boxes; tex = hand.tex; }
       gl.disable(gl.BLEND);
       gl.disable(gl.CULL_FACE);
       gl.uniform1f(this.u.uAlphaTest, 0.5);
-      this._drawDynamic(shapeVerts(boxes, tex, xf, hand.light), gl.TRIANGLES);
+      this._drawDynamic(shapeVerts(boxes, tex, xf, light), gl.TRIANGLES);
+    }
+
+    // Солнце и луна: квадраты на небе, движутся по кругу с востока на запад
+    _drawSky(cam, angle) {
+      const gl = this.gl;
+      gl.disable(gl.DEPTH_TEST);
+      gl.depthMask(false);
+      gl.enable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.uniform1f(this.u.uAlphaTest, 0.01);
+      gl.uniform3f(this.u.uTint, 1, 1, 1);
+      gl.uniform3f(this.u.uOffset, 0, 0, 0);
+      gl.uniform1f(this.u.uFogNear, 1e5);
+      gl.uniform1f(this.u.uFogFar, 2e5);
+      const D = 40;
+      const quad = (a, tile, size) => {
+        const sx = Math.cos(a), sy = Math.sin(a);
+        const c = [cam.x + sx * D, cam.y + sy * D, cam.z];
+        const r = [0, 0, size], u = [-sy * size, sx * size, 0];
+        const [u0, v0, st] = tileUV(tile);
+        const P = (i, j) => [c[0] + r[0] * i + u[0] * j, c[1] + r[1] * i + u[1] * j, c[2] + r[2] * i + u[2] * j, u0 + (i + 1) / 2 * st, v0 + (1 - j) / 2 * st, 1];
+        const v = [P(-1, -1), P(1, -1), P(1, 1), P(-1, -1), P(1, 1), P(-1, 1)];
+        const arr = new Float32Array(36);
+        v.forEach((q, i) => arr.set(q, i * 6));
+        this._drawDynamic(arr, gl.TRIANGLES);
+      };
+      quad(angle, CM.TILES.sun, 5);
+      quad(angle + Math.PI, CM.TILES.moon, 3.5);
+      gl.enable(gl.DEPTH_TEST);
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
     }
 
     // Изометрическая иконка предмета (только для рендерера, созданного с iconMode)
@@ -309,7 +359,10 @@ void main() {
       const gl = this.gl;
       this.resize();
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-      const fog = underwater ? [0.12, 0.25, 0.6] : this.sky;
+      const ex = extras || {};
+      const tint = ex.light || [1, 1, 1];
+      const sky = ex.sky || this.sky;
+      const fog = underwater ? [0.12 * tint[0], 0.25 * tint[1], 0.6 * tint[2]] : sky;
       gl.clearColor(fog[0], fog[1], fog[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       if (!world) return;
@@ -325,6 +378,8 @@ void main() {
       gl.uniformMatrix4fv(this.u.uProj, false, proj);
       gl.uniformMatrix4fv(this.u.uView, false, view);
       gl.uniform3fv(this.u.uFogColor, fog);
+      if (ex.sunAngle !== undefined && !underwater) this._drawSky(cam, ex.sunAngle);
+      gl.uniform3fv(this.u.uTint, tint);
       if (underwater) {
         gl.uniform1f(this.u.uFogNear, 2);
         gl.uniform1f(this.u.uFogFar, 18);
@@ -351,6 +406,19 @@ void main() {
         gl.uniform3f(this.u.uOffset, ch.cx * CS, 0, ch.cz * CS);
         this._bind(ch.opaque);
         gl.drawArrays(gl.TRIANGLES, 0, ch.opaque.count);
+      }
+
+      // Модели: животные, персонаж, выпавшие предметы (вершины уже в мировых координатах)
+      if (ex.meshes) {
+        gl.disable(gl.CULL_FACE);
+        gl.uniform3f(this.u.uOffset, 0, 0, 0);
+        for (const m of ex.meshes) {
+          if (!m.verts.length) continue;
+          const t = m.tint || [1, 1, 1];
+          gl.uniform3f(this.u.uTint, tint[0] * t[0], tint[1] * t[1], tint[2] * t[2]);
+          this._drawDynamic(m.verts, gl.TRIANGLES);
+        }
+        gl.uniform3fv(this.u.uTint, tint);
       }
 
       // Вода — полупрозрачная, от дальних чанков к ближним

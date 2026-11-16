@@ -1,7 +1,7 @@
 'use strict';
-// CraftMine PE v0.0.1 alpha — экраны, игровой цикл
+// CraftMine PE v0.0.2 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.0.1 alpha';
+  const VERSION = '0.0.2 alpha';
   const PLAYER_NAME = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -85,29 +85,46 @@
     toast.timer = setTimeout(() => t.classList.add('hidden'), ms || 2200);
   }
 
-  // ---------- Инвентарь, панель блоков и сердца ----------
-  const Items = CM.Items;
+  // ---------- Инвентарь, панель блоков ----------
+  const Items = CM.Items, BL = CM.BLOCKS;
   Items.buildIcons();
   let inv = Items.Inventory.creativeDefault();
   let creative = true;
   let selected = 0;
+
+  const SLOT_HTML = '<img alt=""><span class="cnt"></span><span class="dur"><i></i></span>';
+  // Обновить ячейку на экране по её содержимому
+  function paintSlot(el, it, showCount) {
+    const img = el.querySelector('img');
+    const id = it ? String(it.id) : '';
+    if (img.dataset.id !== id) { img.dataset.id = id; if (it) img.src = Items.icon(it.id); else img.removeAttribute('src'); }
+    el.querySelector('.cnt').textContent = it && showCount && it.count > 1 ? it.count : '';
+    const dur = el.querySelector('.dur'), t = it && Items.tool(it.id);
+    if (t && it.dur !== undefined && it.dur < t.dur) { dur.style.display = 'block'; dur.firstChild.style.width = Math.max(4, it.dur / t.dur * 100) + '%'; }
+    else dur.style.display = 'none';
+  }
+
   const hbSlots = [];
   for (let i = 0; i < 9; i++) {
     const el = document.createElement('div');
     el.className = 'slot';
-    el.innerHTML = '<img alt=""><span class="cnt"></span>';
-    el.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); selectSlot(i); });
+    el.innerHTML = SLOT_HTML;
+    let hold = 0;
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      selectSlot(i);
+      // долгое нажатие на ячейку панели — выбросить предметы
+      clearTimeout(hold);
+      hold = setTimeout(() => { if (state === 'game') dropSlot(inv.slots, i); }, 650);
+    });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) el.addEventListener(ev, () => clearTimeout(hold));
     $('hotbar').appendChild(el);
     hbSlots.push(el);
   }
   function renderHotbar() {
     hbSlots.forEach((el, i) => {
-      const it = inv.slots[i];
-      const img = el.querySelector('img');
-      el.classList.toggle('empty-slot', !it);
-      if (it && img.dataset.id !== String(it.id)) { img.src = Items.icon(it.id); img.dataset.id = it.id; }
-      if (!it) img.dataset.id = '';
-      el.querySelector('.cnt').textContent = it && !creative && it.count > 1 ? it.count : '';
+      paintSlot(el, inv.slots[i], !creative);
+      el.classList.toggle('empty-slot', !inv.slots[i]);
       el.classList.toggle('sel', i === selected);
     });
   }
@@ -125,72 +142,172 @@
   controls.onDigit = (i) => { if (state === 'game') selectSlot(i); };
   window.addEventListener('wheel', (e) => { if (state === 'game') selectSlot(selected + Math.sign(e.deltaY)); }, { passive: true });
 
-  // Экран инвентаря
-  let picked = -1;
-  function openInventory() {
+  // Выбросить предмет перед собой
+  function throwItem(id, count, dur) {
+    if (!ents || !player) return;
+    const cp = Math.cos(player.pitch);
+    const d = [-Math.sin(player.yaw) * cp, Math.sin(player.pitch), -Math.cos(player.yaw) * cp];
+    const e = player.eye;
+    ents.drop(id, count, dur, [e[0] + d[0] * 0.4, e[1] - 0.35, e[2] + d[2] * 0.4], [d[0] * 6, d[1] * 6 + 2, d[2] * 6], 1.5);
+  }
+  function dropSlot(arr, i) {
+    const s = arr[i];
+    if (!s) return;
+    throwItem(s.id, s.count, s.dur);
+    if (!(creative && arr === inv.slots)) arr[i] = null;
+    swing = 1;
+    renderHotbar();
+  }
+
+  // ---------- Экран инвентаря: крафт, верстак, сундук, печь ----------
+  let invMode = 'craft', invTile = null, picked = null; // picked: {arr, i}
+  let slotEls = [], recipeEls = [], furnaceEls = null;
+
+  function makeSlot(arr, i, kind) {
+    const el = document.createElement('div');
+    el.className = 'islot';
+    el.innerHTML = SLOT_HTML;
+    el.addEventListener('click', () => onSlot(arr, i, kind));
+    slotEls.push({ el, arr, i, kind });
+    return el;
+  }
+  function onSlot(arr, i, kind) {
+    if (!picked) {
+      if (arr[i]) picked = { arr, i };
+      else if (kind === 'hb') selected = i;
+    } else if (picked.arr === arr && picked.i === i) { picked = null; if (kind === 'hb') selected = i; }
+    else if (kind === 'out') picked = null;
+    else { Items.moveSlot(picked.arr, picked.i, arr, i); picked = null; }
+    syncInv();
+  }
+  function syncInv() {
+    for (const s of slotEls) {
+      paintSlot(s.el, s.arr[s.i], !creative || s.arr !== inv.slots);
+      s.el.classList.toggle('picked', !!picked && picked.arr === s.arr && picked.i === s.i);
+      s.el.classList.toggle('sel', s.kind === 'hb' && s.i === selected);
+    }
+    for (const r of recipeEls) {
+      const can = inv.canCraft(r.r);
+      r.el.classList.toggle('no', !can);
+      r.el.style.order = can ? 0 : 1;
+      r.r.in.forEach(([id, n], k) => {
+        const have = inv.count(id);
+        r.counts[k].textContent = have + '/' + n;
+        r.counts[k].parentNode.classList.toggle('miss', have < n);
+      });
+    }
+    if (furnaceEls && invTile) {
+      furnaceEls.flame.style.height = (invTile.burnMax ? Math.max(0, invTile.burn / invTile.burnMax) * 100 : 0) + '%';
+      furnaceEls.arrow.style.width = Math.min(100, invTile.cook / Items.SMELT_TIME * 100) + '%';
+    }
+    $('btn-drop').disabled = !picked;
+    renderHotbar();
+  }
+
+  function craft(r) {
+    if (!inv.canCraft(r)) return;
+    for (const [id, n] of r.in) inv.remove(id, n);
+    const t = Items.tool(r.out[0]);
+    const left = inv.add(r.out[0], r.out[1], t ? t.dur : undefined);
+    if (left > 0) throwItem(r.out[0], left, t ? t.dur : undefined);
+    syncInv();
+  }
+
+  function openInventory(mode, tile) {
     if (state !== 'game') return;
     state = 'inventory';
-    picked = -1;
+    invMode = typeof mode === 'string' ? mode : 'craft';
+    invTile = tile || null;
+    picked = null; slotEls = []; recipeEls = []; furnaceEls = null;
     controls.reset();
-    renderInventory();
+    const left = $('inv-left'), grid = $('inv-grid'), hb = $('inv-hotbar');
+    left.innerHTML = ''; grid.innerHTML = ''; hb.innerHTML = '';
+    const catalog = creative && invMode === 'craft';
+    grid.style.display = catalog ? 'none' : '';
+    for (let i = 9; i < 36 && !catalog; i++) grid.appendChild(makeSlot(inv.slots, i, 'inv'));
+    for (let i = 0; i < 9; i++) hb.appendChild(makeSlot(inv.slots, i, 'hb'));
+    let title = 'Инвентарь', sub = 'Крафт', help = 'Нажми на предмет, затем на ячейку, чтобы переложить. «Выбросить» кидает выбранный предмет на землю.';
+
+    if (catalog) {
+      title = 'Все блоки и предметы'; sub = 'Каталог';
+      help = 'Нажми на предмет в каталоге, и он попадёт в выбранную ячейку панели.';
+      const g = document.createElement('div');
+      g.className = 'inv-grid';
+      for (const id of Items.CATALOG) {
+        const el = document.createElement('div');
+        el.className = 'islot';
+        el.innerHTML = `<img alt="" src="${Items.icon(id)}">`;
+        el.addEventListener('click', () => {
+          const t = Items.tool(id);
+          inv.slots[selected] = { id, count: 1, dur: t ? t.dur : undefined };
+          picked = null;
+          syncInv();
+          $('inv-left-title').textContent = Items.name(id);
+        });
+        g.appendChild(el);
+      }
+      left.appendChild(g);
+    } else if (invMode === 'craft' || invMode === 'table') {
+      if (invMode === 'table') { title = 'Верстак'; sub = 'Крафт: все рецепты'; } else sub = 'Крафт (больше рецептов на верстаке)';
+      const list = document.createElement('div');
+      list.style.cssText = 'display:flex;flex-direction:column';
+      for (const r of Items.RECIPES) {
+        if (r.table && invMode !== 'table') continue;
+        const el = document.createElement('div');
+        el.className = 'recipe';
+        el.innerHTML = `<img alt="" src="${Items.icon(r.out[0])}"><div class="rname">${Items.name(r.out[0])}${r.out[1] > 1 ? ` <b>×${r.out[1]}</b>` : ''}</div><div class="rin"></div>`;
+        const counts = [];
+        for (const [id] of r.in) {
+          const sp = document.createElement('span');
+          sp.innerHTML = `<img alt="" src="${Items.icon(id)}"><i></i>`;
+          sp.title = Items.name(id);
+          counts.push(sp.lastChild);
+          el.lastChild.appendChild(sp);
+        }
+        el.addEventListener('click', () => craft(r));
+        recipeEls.push({ el, r, counts });
+        list.appendChild(el);
+      }
+      left.appendChild(list);
+    } else if (invMode === 'chest') {
+      title = 'Сундук'; sub = 'Содержимое сундука';
+      const g = document.createElement('div');
+      g.className = 'inv-grid';
+      for (let i = 0; i < 27; i++) g.appendChild(makeSlot(tile.slots, i, 'chest'));
+      left.appendChild(g);
+    } else if (invMode === 'furnace') {
+      title = 'Печь'; sub = 'Сверху — что плавить, снизу — топливо';
+      help = 'Положи руду, песок или сырое мясо наверх, а уголь или дерево вниз. Готовое появится справа.';
+      const f = document.createElement('div');
+      f.className = 'furnace';
+      const c1 = document.createElement('div'); c1.className = 'fcol';
+      const flame = document.createElement('div'); flame.className = 'flame'; flame.innerHTML = '<i></i>';
+      c1.append(makeSlot(tile.slots, 0, 'in'), flame, makeSlot(tile.slots, 1, 'fuel'));
+      const arrow = document.createElement('div'); arrow.className = 'arrow'; arrow.innerHTML = '<i></i>';
+      const c2 = document.createElement('div'); c2.className = 'fcol';
+      c2.append(makeSlot(tile.slots, 2, 'out'));
+      f.append(c1, arrow, c2);
+      left.appendChild(f);
+      furnaceEls = { flame: flame.firstChild, arrow: arrow.firstChild };
+    }
+    $('inv-title').textContent = title;
+    $('inv-left-title').textContent = sub;
+    $('inv-help').textContent = help;
+    syncInv();
     show('screen-inv');
   }
   function closeInventory() {
     if (state !== 'inventory') return;
     state = 'game';
+    picked = null; invTile = null; furnaceEls = null;
     controls.reset();
     show(null);
     selectSlot(selected);
   }
-  function slotEl(it, cls) {
-    const d = document.createElement('div');
-    d.className = 'islot' + (cls || '');
-    if (it) d.innerHTML = `<img alt="" src="${Items.icon(it.id)}">` + (!creative && it.count > 1 ? `<span class="cnt">${it.count}</span>` : '');
-    return d;
-  }
-  function renderInventory() {
-    const grid = $('inv-grid'), hb = $('inv-hotbar');
-    grid.innerHTML = ''; hb.innerHTML = '';
-    grid.classList.toggle('catalog', creative);
-    if (creative) {
-      $('inv-title').textContent = 'Все блоки';
-      $('inv-help').textContent = 'Нажми на блок, и он попадёт в выбранную ячейку панели. Повторный тап по выбранной ячейке очищает её.';
-      for (const id of Items.CATALOG) {
-        const d = slotEl({ id, count: 1 });
-        d.title = Items.name(id);
-        d.addEventListener('click', () => { inv.slots[selected] = { id, count: 1 }; renderInventory(); renderHotbar(); });
-        grid.appendChild(d);
-      }
-      for (let i = 0; i < 9; i++) {
-        const d = slotEl(inv.slots[i], i === selected ? ' sel' : '');
-        d.addEventListener('click', () => {
-          if (i === selected) inv.slots[i] = null;
-          selected = i;
-          renderInventory(); renderHotbar();
-        });
-        hb.appendChild(d);
-      }
-    } else {
-      $('inv-title').textContent = 'Инвентарь';
-      $('inv-help').textContent = 'Нажми на предмет, затем на другую ячейку: предметы переложатся. Нижний ряд — панель быстрого доступа.';
-      const cell = (i) => {
-        const d = slotEl(inv.slots[i], (i === picked ? ' picked' : '') + (i === selected ? ' sel' : ''));
-        d.addEventListener('click', () => {
-          if (picked < 0) {
-            if (inv.slots[i]) picked = i;
-            else if (i < 9) selected = i;
-          } else { inv.move(picked, i); picked = -1; }
-          renderInventory(); renderHotbar();
-        });
-        return d;
-      };
-      for (let i = 9; i < 36; i++) grid.appendChild(cell(i));
-      for (let i = 0; i < 9; i++) hb.appendChild(cell(i));
-    }
-  }
-  tap('btn-inv', openInventory);
+  tap('btn-inv', () => openInventory('craft'));
   tap('btn-inv-close', closeInventory);
-  controls.onInventoryKey = () => { if (state === 'game') openInventory(); else if (state === 'inventory') closeInventory(); };
+  tap('btn-drop', () => { if (picked) { dropSlot(picked.arr, picked.i); picked = null; syncInv(); } });
+  controls.onInventoryKey = () => { if (state === 'game') openInventory('craft'); else if (state === 'inventory') closeInventory(); };
 
   const HEART = ['.##.##.', '#ab#bb#', '#abbbb#', '#bbbbb#', '.#bbb#.', '..#b#..', '...#...'];
   const heartFull = P(HEART, { '#': '#2a0a0a', a: '#ffb3b3', b: '#e0262b' }, 2);
@@ -227,7 +344,7 @@
   const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead', 'screen-inv'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
-    $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused' || state === 'dead' || state === 'inventory'));
+    $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused' || state === 'dead' || state === 'inventory' || state === 'sleep'));
   }
 
   function tap(id, fn) { $(id).addEventListener('click', (e) => { e.preventDefault(); fn(e); }); }
@@ -270,7 +387,7 @@
         e.stopPropagation();
         if (confirm(`Удалить мир «${w.name}»?`)) {
           saveWorlds(loadWorlds().filter((x) => x.id !== w.id));
-          try { localStorage.removeItem('craftmine.edits.' + w.id); } catch (_) { /* ignore */ }
+          try { localStorage.removeItem('craftmine.edits.' + w.id); localStorage.removeItem('craftmine.tiles.' + w.id); } catch (_) { /* ignore */ }
           renderWorldList();
         }
       });
@@ -317,7 +434,7 @@
     else seed = CM.hashString(seedText) | 0;
     const rec = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      name, seed, seedText: seedText || String(seed), type: worldType, mode: worldMode, inventory: null,
+      name, seed, seedText: seedText || String(seed), type: worldType, mode: worldMode, inventory: null, time: 0.05, spawn: null,
       created: Date.now(), lastPlayed: Date.now(),
       version: VERSION, player: null,
     };
@@ -367,7 +484,7 @@
   tap('btn-resume', resume);
   tap('btn-pause-settings', () => { settingsReturn = 'pause'; openSettings(); });
   tap('btn-respawn', () => {
-    const f = world.findSpawn();
+    const f = current.spawn ? { x: current.spawn[0], z: current.spawn[2] } : world.findSpawn();
     const sp = world.safeSpot(f.x, f.z);
     player.pos = [sp.x, sp.y, sp.z];
     player.vel = [0, 0, 0];
@@ -394,6 +511,10 @@
     }
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
+  // Вид от первого / третьего лица
+  function toggleView() { if (state === 'game') thirdPerson = !thirdPerson; }
+  tap('btn-view', toggleView);
+  window.addEventListener('keydown', (e) => { if (e.code === 'F5' || e.code === 'KeyV') { e.preventDefault(); toggleView(); } });
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -420,6 +541,11 @@
     if (menuWorld) { menuWorld.dispose(); menuWorld = null; }
     world = new CM.World(renderer, rec.seed, rec.type);
     world.importEdits(store.get('edits.' + rec.id, {}));
+    world.importTiles(store.get('tiles.' + rec.id, {}));
+    ents = new CM.Entities(world);
+    time = typeof rec.time === 'number' ? rec.time : 0.05;
+    thirdPerson = false;
+    $('sleep').classList.remove('on');
     player = new CM.Player(PLAYER_NAME);
     player.onHurt = () => {
       const h = $('hurt');
@@ -466,28 +592,102 @@
     current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: player.flying };
     current.inventory = inv.toJSON();
     current.mode = creative ? 'creative' : 'survival';
+    current.time = time;
+    if (world) store.set('tiles.' + current.id, world.exportTiles());
     current.lastPlayed = Date.now();
     updateRecord(current);
     if (world) store.set('edits.' + current.id, world.exportEdits());
   }
 
-  // ---------- Игровой цикл ----------
-  let breaking = null;  // {x,y,z,progress}
-  let swing = 0;        // анимация взмаха рукой, 0..1
-  const REACH = 6;
+  // ---------- Игровая логика ----------
+  let breaking = null;      // {x,y,z,progress}
+  let swing = 0;            // анимация взмаха рукой, 0..1
+  let breakCooldown = 0;
+  let thirdPerson = false;
+  let ents = null;
+  let time = 0.05;          // время суток 0..1: 0 — рассвет, 0.25 — полдень, 0.5 — закат, 0.75 — полночь
+  let sleepT = 0;
+  const REACH = 5, DAY_LEN = 1200;
 
-  function pick(cam, sx, sy) {
-    return world.raycast([cam.x, cam.y, cam.z], renderer.screenRay(cam, sx, sy), REACH);
+  // Освещение и цвет неба по времени суток
+  function dayLight() {
+    const t = creative ? 0.2 : time;
+    const a = t * Math.PI * 2, s = Math.sin(a);
+    const L = Math.max(0, Math.min(1, s * 3 + 0.6));
+    const b = 0.22 + 0.78 * L;
+    const day = [0.53, 0.75, 0.98], night = [0.015, 0.025, 0.07];
+    const sky = day.map((d, i) => night[i] + (d - night[i]) * L);
+    const glow = Math.max(0, 1 - Math.abs(s) / 0.3) * 0.55;
+    const sun = [0.96, 0.52, 0.28];
+    for (let i = 0; i < 3; i++) sky[i] += (sun[i] * (0.35 + 0.65 * L) - sky[i]) * glow;
+    return { light: [b, b, Math.min(1, b + (1 - b) * 0.14)], sky, sunAngle: a, night: s < -0.05 };
   }
 
-  // Тап: открыть/закрыть дверь или люк, иначе поставить предмет из руки
+  // Камера: от первого лица или сзади персонажа
+  function viewCam() {
+    const c = player.camera();
+    if (!thirdPerson) return c;
+    const cp = Math.cos(c.pitch);
+    const d = [-Math.sin(c.yaw) * cp, Math.sin(c.pitch), -Math.cos(c.yaw) * cp];
+    let dist = 4;
+    for (let k = 0.3; k <= 4; k += 0.2) {
+      if (world.getBoxes(Math.floor(c.x - d[0] * k), Math.floor(c.y - d[1] * k), Math.floor(c.z - d[2] * k))) { dist = Math.max(0.3, k - 0.3); break; }
+    }
+    return { x: c.x - d[0] * dist, y: c.y - d[1] * dist, z: c.z - d[2] * dist, yaw: c.yaw, pitch: c.pitch, dist };
+  }
+
+  function castRay(cam, sx, sy) {
+    const o = [cam.x, cam.y, cam.z], d = renderer.screenRay(cam, sx, sy), reach = REACH + (cam.dist || 0);
+    return { o, d, reach, hit: world.raycast(o, d, reach) };
+  }
+  function pick(cam, sx, sy) { return castRay(cam, sx, sy).hit; }
+
+  // Износ инструмента в руке
+  function wearTool() {
+    const s = inv.slots[selected];
+    const t = s && Items.tool(s.id);
+    if (creative || !t) return;
+    s.dur = (s.dur === undefined ? t.dur : s.dur) - 1;
+    if (s.dur <= 0) { inv.slots[selected] = null; toast('Инструмент сломался'); }
+    renderHotbar();
+  }
+
+  function otherHalf(x, y, z, b) {
+    if (b.kind === 'door') return [x, b.upper ? y - 1 : y + 1, z];
+    if (b.kind === 'bed') { const v = CM.DIRVEC[b.facing], k = b.head ? -1 : 1; return [x + v[0] * k, y, z + v[1] * k]; }
+    return null;
+  }
+
+  // Тап: ударить животное, открыть дверь/сундук/печь/верстак, лечь в кровать, съесть еду или поставить блок
   function useAt(cam, sx, sy) {
-    const hit = pick(cam, sx, sy);
-    if (!hit) return;
-    const hb = CM.BLOCKS[hit.id];
-    if (hb.kind === 'door' || hb.kind === 'trapdoor') { toggleOpen(hit.x, hit.y, hit.z, hit.id); swing = 1; return; }
-    const item = heldItem();
-    if (!item || (!hit.n[0] && !hit.n[1] && !hit.n[2])) return;
+    const { o, d, reach, hit } = castRay(cam, sx, sy);
+    const mh = ents.rayMob(o, d, reach);
+    const slot = inv.slots[selected], held = slot ? slot.id : 0;
+    if (mh && (!hit || mh.t < hit.t)) {
+      const t = Items.tool(held);
+      ents.hitMob(mh.mob, t ? t.dmg : 1, player.pos);
+      swing = 1;
+      wearTool();
+      return;
+    }
+    if (hit) {
+      const hb = BL[hit.id];
+      if (hb.kind === 'door' || hb.kind === 'trapdoor') { toggleOpen(hit.x, hit.y, hit.z, hit.id); swing = 1; return; }
+      if (hb.kind === 'crafting') { openInventory('table'); return; }
+      if (hb.kind === 'chest') { openInventory('chest', world.tile(hit.x, hit.y, hit.z, () => ({ type: 'chest', slots: new Array(27).fill(null) }))); return; }
+      if (hb.kind === 'furnace') { openInventory('furnace', world.tile(hit.x, hit.y, hit.z, () => ({ type: 'furnace', slots: [null, null, null], burn: 0, burnMax: 0, cook: 0 }))); return; }
+      if (hb.kind === 'bed') { useBed(); return; }
+    }
+    const heal = Items.food(held);
+    if (heal) {
+      if (creative || player.health >= 20) return;
+      player.health = Math.min(20, player.health + heal);
+      inv.takeOne(selected);
+      swing = 1;
+      selectSlot(selected);
+      return;
+    }
+    if (!hit || !held || !Items.isBlock(held) || (!hit.n[0] && !hit.n[1] && !hit.n[2])) return;
     const x = hit.x + hit.n[0], y = hit.y + hit.n[1], z = hit.z + hit.n[2];
     const free = (bx, by, bz) => {
       if (by < 0 || by >= CM.H) return false;
@@ -495,14 +695,18 @@
       return (c === Bk.AIR || c === Bk.WATER) && !player.intersectsBlock(bx, by, bz);
     };
     if (!free(x, y, z)) return;
-    const ib = CM.BLOCKS[item], f = player.facing;
+    const ib = BL[held], f = player.facing;
     let ok = false;
     if (ib.kind === 'door') {
-      const below = CM.BLOCKS[world.getBlock(x, y - 1, z)];
+      const below = BL[world.getBlock(x, y - 1, z)];
       if (!free(x, y + 1, z) || !below || !below.solid || below.boxes) return;
       ok = world.setBlock(x, y, z, Bk.DOOR + f) && world.setBlock(x, y + 1, z, Bk.DOOR + f + 8);
-    } else if (ib.kind === 'stairs' || ib.kind === 'trapdoor') ok = world.setBlock(x, y, z, item + f);
-    else ok = world.setBlock(x, y, z, item);
+    } else if (ib.kind === 'bed') {
+      const v = CM.DIRVEC[f];
+      if (!free(x + v[0], y, z + v[1])) return;
+      ok = world.setBlock(x, y, z, Bk.BED + f) && world.setBlock(x + v[0], y, z + v[1], Bk.BED + f + 4);
+    } else if (ib.kind === 'stairs' || ib.kind === 'trapdoor' || ib.kind === 'furnace' || ib.kind === 'chest') ok = world.setBlock(x, y, z, held + f);
+    else ok = world.setBlock(x, y, z, held);
     if (ok) {
       swing = 1;
       if (!creative) { inv.takeOne(selected); selectSlot(selected); }
@@ -511,31 +715,37 @@
 
   function toggleOpen(x, y, z, id) {
     world.setBlock(x, y, z, id ^ 4);
-    const b = CM.BLOCKS[id];
-    if (b.kind === 'door') {
-      const oy = b.upper ? y - 1 : y + 1, o = world.getBlock(x, oy, z);
-      if (CM.BLOCKS[o] && CM.BLOCKS[o].kind === 'door') world.setBlock(x, oy, z, o ^ 4);
-    }
+    const o = otherHalf(x, y, z, BL[id]);
+    if (o) { const oid = world.getBlock(o[0], o[1], o[2]); if (BL[oid] && BL[oid].kind === 'door') world.setBlock(o[0], o[1], o[2], oid ^ 4); }
   }
 
-  function breakBlock(hit) {
-    const b = CM.BLOCKS[hit.id];
+  function useBed() {
+    if (creative) { toast('В творческом режиме сон отключён'); return; }
+    current.spawn = player.pos.slice();
+    if (!dayLight().night) { toast('Спать можно только ночью. Точка возрождения сохранена.'); return; }
+    state = 'sleep';
+    sleepT = 0;
+    controls.reset();
+    $('sleep').classList.add('on');
+  }
+
+  function breakBlock(hit, drops) {
+    const b = BL[hit.id];
     world.setBlock(hit.x, hit.y, hit.z, Bk.AIR);
-    if (b.kind === 'door') {
-      const oy = b.upper ? hit.y - 1 : hit.y + 1, o = world.getBlock(hit.x, oy, hit.z);
-      if (CM.BLOCKS[o] && CM.BLOCKS[o].kind === 'door') world.setBlock(hit.x, oy, hit.z, Bk.AIR);
-    }
-    if (!creative && b.item) {
-      if (inv.add(b.item, 1) > 0) toast('Инвентарь полон');
-      renderHotbar();
-    }
+    const o = otherHalf(hit.x, hit.y, hit.z, b);
+    if (o) { const oid = world.getBlock(o[0], o[1], o[2]); if (BL[oid] && BL[oid].kind === b.kind) world.setBlock(o[0], o[1], o[2], Bk.AIR); }
+    const c = [hit.x + 0.5, hit.y + 0.4, hit.z + 0.5];
+    const tile = world.removeTile(hit.x, hit.y, hit.z);
+    if (creative) return;
+    if (tile) for (const s of tile.slots) if (s) ents.drop(s.id, s.count, s.dur, c);
+    if (drops && b.item) ents.drop(b.item, 1, undefined, c, [(Math.random() - 0.5) * 1.5, 2.5, (Math.random() - 0.5) * 1.5], 0.3);
   }
 
   // Обработка ломания/установки, возвращает данные для подсветки
-  let breakCooldown = 0;
   function interact(dt, cam, now) {
     const extras = { selection: null, crack: null };
-    for (const t of controls.consumeTaps()) useAt(cam, t.x, t.y);
+    for (const t of controls.consumeTaps()) { if (state === 'game') useAt(cam, t.x, t.y); }
+    if (state !== 'game') return extras;
     const g = controls.updateGesture(now);
     const aim = g || (controls.hover && !controls.touch ? controls.hover : null);
     const hit = aim ? pick(cam, aim.x, aim.y) : null;
@@ -544,23 +754,51 @@
     if (g && hit) {
       if (creative) {
         // в творческом режиме блоки ломаются сразу, по одному за 0.25 с
-        if (breakCooldown <= 0) { breakBlock(hit); breakCooldown = 0.25; swing = 1; }
+        if (breakCooldown <= 0) { breakBlock(hit, false); breakCooldown = 0.25; swing = 1; }
         breaking = null;
       } else {
         if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) breaking = { x: hit.x, y: hit.y, z: hit.z, progress: 0 };
-        const hard = CM.BLOCKS[hit.id].hardness;
-        if (hard > 0) {
-          breaking.progress += dt / hard;
+        const m = Items.mining(hit.id, heldItem());
+        if (isFinite(m.time)) {
+          breaking.progress += dt / m.time;
           extras.crack = { x: hit.x, y: hit.y, z: hit.z, bounds: hit.bounds, stage: Math.min(3, Math.floor(breaking.progress * 4)) };
-          if (breaking.progress >= 1) { breakBlock(hit); breaking = null; extras.crack = null; }
+          if (breaking.progress >= 1) { breakBlock(hit, m.drops); wearTool(); breaking = null; extras.crack = null; }
         }
       }
       if (swing <= 0) swing = 1;
     } else breaking = null;
-    swing = Math.max(0, swing - dt * 3.5);
     return extras;
   }
 
+  // Печи: горение топлива и плавка
+  function tickFurnaces(dt) {
+    for (const t of world.tiles.values()) {
+      if (t.type !== 'furnace') continue;
+      const s = t.slots, res = s[0] ? Items.SMELT[s[0].id] : undefined;
+      const can = res !== undefined && (!s[2] || (s[2].id === res && s[2].count < Items.maxStack(res)));
+      if (t.burn > 0) t.burn -= dt;
+      if (t.burn <= 0 && can && s[1] && Items.fuel(s[1].id) > 0) {
+        t.burn = t.burnMax = Items.fuel(s[1].id);
+        if (--s[1].count <= 0) s[1] = null;
+      }
+      if (t.burn > 0 && can) {
+        t.cook += dt;
+        if (t.cook >= Items.SMELT_TIME) {
+          t.cook = 0;
+          if (--s[0].count <= 0) s[0] = null;
+          if (s[2]) s[2].count++; else s[2] = { id: res, count: 1 };
+        }
+      } else t.cook = 0;
+    }
+  }
+
+  function onPickup(id, count, dur) {
+    const left = inv.add(id, count, dur);
+    if (left < count) renderHotbar();
+    return left;
+  }
+
+  // ---------- Игровой цикл ----------
   let last = performance.now();
   let fpsFrames = 0, fpsTime = 0, fps = 0;
 
@@ -617,35 +855,63 @@
       renderHearts(player.health);
       $('dpad').classList.toggle('flying', player.flying);
       if (player.health <= 0 && !creative) {
+        // вещи остаются на месте гибели
+        for (let i = 0; i < 36; i++) { const s = inv.slots[i]; if (s) ents.drop(s.id, s.count, s.dur, [player.pos[0], player.pos[1] + 0.5, player.pos[2]]); inv.slots[i] = null; }
+        renderHotbar();
         state = 'dead';
         controls.reset();
         show('screen-dead');
       }
       if (now - lastSave > 10000) { savePlayer(); lastSave = now; }
       if (settings.showCoords) {
-        const p = player.pos;
+        const p = player.pos, h = ((creative ? 0.2 : time) * 24 + 6) % 24;
         $('debug').textContent =
-          `CraftMine PE ${VERSION}\n${PLAYER_NAME}  ${fps} FPS\nXYZ: ${p[0].toFixed(1)} / ${p[1].toFixed(1)} / ${p[2].toFixed(1)}\nЧанков: ${world.chunks.size}`;
+          `CraftMine PE ${VERSION}\n${PLAYER_NAME}  ${fps} FPS\nXYZ: ${p[0].toFixed(1)} / ${p[1].toFixed(1)} / ${p[2].toFixed(1)}\n` +
+          `Время: ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor(h % 1 * 60)).padStart(2, '0')}  Животных: ${ents.mobs.length}`;
       }
     }
 
-    // game или paused: мир продолжает подгружаться и рисоваться
+    if (state === 'sleep') {
+      sleepT += dt;
+      if (sleepT > 1.6) {
+        time = 0.03;
+        $('sleep').classList.remove('on');
+        state = 'game';
+        toast('Доброе утро!');
+      }
+    }
+
+    // Мир живёт, пока открыт инвентарь: животные, предметы, печи, время суток
+    if (state === 'game' || state === 'inventory') {
+      ents.update(dt, { player, R, onPickup });
+      tickFurnaces(dt);
+      if (!creative) time = (time + dt / DAY_LEN) % 1;
+      if (state === 'inventory' && furnaceEls) syncInv();
+    }
+
     world.update(player.pos[0], player.pos[2], R, 2, 2);
-    const cam = player.camera();
-    const extras = state === 'game' ? interact(dt, cam, now) : { selection: null, crack: null };
+    const cam = viewCam();
+    const extras = interact(dt, cam, now);
+    swing = Math.max(0, swing - dt * 3.5);
+    const sky = dayLight();
+    extras.light = sky.light; extras.sky = sky.sky; extras.sunAngle = sky.sunAngle;
+
+    const m = ents.meshes();
     const hs = Math.hypot(player.vel[0], player.vel[2]);
-    const held = heldItem();
-    const shape = held ? Items.itemShape(held) : null;
-    extras.hand = {
-      arm: !held,
-      boxes: shape && shape.boxes,
-      tex: shape && shape.tex,
-      swing,
-      bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs),
-      bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs),
-      light: player.headInWater ? 0.7 : 1,
-    };
-    renderer.render(world, cam, R, player.headInWater, extras);
+    if (thirdPerson) {
+      const sw = Math.sin(player.bob) * 0.9 * Math.min(1, hs / 2);
+      CM.Models.build(m.normal, 'player', player.pos[0], player.pos[1], player.pos[2], player.yaw,
+        { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0 }, 1);
+    } else {
+      const slot = inv.slots[selected], held = slot ? slot.id : 0;
+      const hand = { swing, bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs), bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs), light: player.headInWater ? 0.7 : 1 };
+      if (!held) hand.arm = true;
+      else if (Items.isBlock(held)) { const sh = Items.itemShape(held); hand.boxes = sh.boxes; hand.tex = sh.tex; }
+      else hand.sprite = Items.sprite(held);
+      extras.hand = hand;
+    }
+    extras.meshes = [{ verts: new Float32Array(m.normal) }, { verts: new Float32Array(m.hurt), tint: [1, 0.45, 0.45] }];
+    renderer.render(world, cam, R, player.headInWater && !thirdPerson, extras);
   }
 
   // Кнопка «Назад» в Android: true — обработано, false — выйти из приложения
@@ -657,7 +923,7 @@
       if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
       resume(); return true;
     }
-    if (state === 'dead' || state === 'loading') return true;
+    if (state === 'dead' || state === 'loading' || state === 'sleep') return true;
     if (visible('screen-create')) { show('screen-worlds'); return true; }
     if (visible('screen-worlds')) { show('screen-menu'); return true; }
     if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
@@ -673,5 +939,9 @@
   show('screen-menu');
   requestAnimationFrame(frame);
 
-  CM.debug = { get world() { return world; }, get player() { return player; }, get state() { return state; }, selectSlot, get inv() { return inv; }, get creative() { return creative; }, openInventory, renderer, pick: (x, y) => pick(player.camera(), x, y) };
+  CM.debug = {
+    get world() { return world; }, get player() { return player; }, get state() { return state; }, get inv() { return inv; },
+    get creative() { return creative; }, get ents() { return ents; }, get time() { return time; }, set time(v) { time = v; },
+    selectSlot, renderer, openInventory, renderHotbar, toggleView, pick: (x, y) => pick(viewCam(), x, y),
+  };
 })(window.CM);

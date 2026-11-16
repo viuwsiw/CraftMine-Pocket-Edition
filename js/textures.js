@@ -34,6 +34,7 @@
   }
 
   function paint(name, fn) {
+    if (!(name in TILES)) TILES[name] = Object.keys(TILES).length; // новые тайлы добавляются в конец атласа
     const i = TILES[name];
     const img = ctx.createImageData(TILE, TILE);
     for (let y = 0; y < TILE; y++) {
@@ -305,5 +306,16 @@
   }
 
   CM.TILES = TILES;
-  CM.Textures = { atlas: canvas, tile: TILE, perRow: PER_ROW, tileURL, blockIcon, pixelIcon };
+  // Прочитать пиксель уже нарисованного тайла
+  function pixelOf(name) {
+    const i = TILES[name];
+    const d = ctx.getImageData((i % PER_ROW) * TILE, Math.floor(i / PER_ROW) * TILE, TILE, TILE).data;
+    return (x, y) => { const o = (y * TILE + x) * 4; return [d[o], d[o + 1], d[o + 2], d[o + 3]]; };
+  }
+  // Тайл по маске символов (строки 16x16) и палитре {символ: [r,g,b,a]}
+  function paintMask(name, rows, palette) {
+    paint(name, (x, y) => palette[rows[y][x]] || [0, 0, 0, 0]);
+  }
+
+  CM.Textures = { atlas: canvas, tile: TILE, perRow: PER_ROW, tileURL, blockIcon, pixelIcon, paint, paintMask, pixelOf, rand, mul, vary };
 })(window.CM);
