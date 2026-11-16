@@ -140,23 +140,21 @@
     </div>
   </section>
 
-  <!-- Инвентарь, крафт, сундук, печь -->
-  <section id="screen-inv" class="screen dim-bg hidden">
-    <div class="inv-panel">
-      <div class="inv-head"><span id="inv-title">Инвентарь</span><button class="inv-close" id="btn-inv-close" aria-label="Закрыть">✕</button></div>
-      <div class="inv-body">
-        <div class="inv-col">
-          <div class="inv-sub" id="inv-left-title"></div>
-          <div class="inv-left" id="inv-left"></div>
-        </div>
-        <div class="inv-col">
-          <div class="inv-sub">Nikita</div>
-          <div class="inv-grid" id="inv-grid"></div>
-          <div class="inv-sep"></div>
-          <div class="inv-grid hb" id="inv-hotbar"></div>
-        </div>
+  <!-- Инвентарь, крафт, сундук, печь: категории слева, разделы справа, панель быстрого доступа остаётся снизу -->
+  <section id="screen-inv" class="inv-screen hidden">
+    <div class="inv-tabs left" id="inv-tabs-left"></div>
+    <div class="inv-main">
+      <div class="inv-content" id="inv-content"></div>
+      <div class="inv-bar">
+        <span class="inv-info" id="inv-info"></span>
+        <span class="inv-ing" id="inv-ing"></span>
+        <button class="inv-btn green hidden" id="btn-craft">Создать</button>
+        <button class="inv-btn" id="btn-drop">Выбросить</button>
       </div>
-      <div class="inv-foot"><span class="inv-help" id="inv-help"></span><button class="inv-drop" id="btn-drop">Выбросить</button></div>
+    </div>
+    <div class="inv-tabs right">
+      <button class="inv-x" id="btn-inv-close" aria-label="Закрыть">✕</button>
+      <div id="inv-tabs-right"></div>
     </div>
   </section>
 

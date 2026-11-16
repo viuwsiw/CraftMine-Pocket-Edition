@@ -112,6 +112,7 @@
     let hold = 0;
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault(); e.stopPropagation();
+      if (state === 'inventory') { onSlot(inv.slots, i, 'hb'); return; } // при открытом инвентаре панель — обычные ячейки
       selectSlot(i);
       // долгое нажатие на ячейку панели — выбросить предметы
       clearTimeout(hold);
@@ -126,6 +127,7 @@
       paintSlot(el, inv.slots[i], !creative);
       el.classList.toggle('empty-slot', !inv.slots[i]);
       el.classList.toggle('sel', i === selected);
+      el.classList.toggle('picked', state === 'inventory' && !!picked && picked.arr === inv.slots && picked.i === i);
     });
   }
   function heldItem() { const it = inv.slots[selected]; return it ? it.id : 0; }
@@ -159,9 +161,61 @@
     renderHotbar();
   }
 
-  // ---------- Экран инвентаря: крафт, верстак, сундук, печь ----------
+  // ---------- Экран инвентаря: вкладки-разделы справа, категории слева, сетка ячеек, панель внизу ----------
   let invMode = 'craft', invTile = null, picked = null; // picked: {arr, i}
+  let invSection = 'inv', invCat = 0, selRecipe = null;
   let slotEls = [], recipeEls = [], furnaceEls = null;
+
+  const iconOf = (id) => Items.icon(id);
+  const FACE_ICON = CM.Textures.tileURL('pl_face', 3);
+  // Категории каталога творческого режима
+  const CATS = [
+    { name: 'Блоки', icon: () => iconOf(Bk.BRICKS), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && !BL[id].kind) },
+    { name: 'Мебель и детали', icon: () => iconOf(Bk.DOOR), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && BL[id].kind) },
+    { name: 'Инструменты', icon: () => iconOf(Items.toolId(2, 3)), ids: Items.CATALOG.filter((id) => Items.tool(id)) },
+    { name: 'Материалы и еда', icon: () => iconOf(CM.I.BEEF), ids: Items.CATALOG.filter((id) => !Items.isBlock(id) && !Items.tool(id)) },
+  ];
+  const RCATS = [
+    { name: 'Блоки и вещи', icon: () => iconOf(Bk.PLANKS), test: (r) => !Items.tool(r.out[0]) },
+    { name: 'Инструменты', icon: () => iconOf(Items.toolId(1, 0)), test: (r) => !!Items.tool(r.out[0]) },
+  ];
+  const SECTIONS = {
+    inv: { name: 'Инвентарь', icon: () => FACE_ICON },
+    catalog: { name: 'Все предметы', icon: () => iconOf(Bk.GRASS) },
+    craft: { name: 'Крафт', icon: () => iconOf(Bk.CRAFTING) },
+    table: { name: 'Верстак', icon: () => iconOf(Bk.CRAFTING) },
+    chest: { name: 'Сундук', icon: () => iconOf(Bk.CHEST) },
+    furnace: { name: 'Печь', icon: () => iconOf(Bk.FURNACE) },
+  };
+  function sectionList() {
+    if (invMode === 'craft') return creative ? ['catalog', 'inv'] : ['inv', 'craft'];
+    return [invMode, 'inv'];
+  }
+
+  // Положить стопку в диапазон ячеек; вернуть остаток
+  function addInto(arr, from, to, it) {
+    let n = it.count;
+    const max = Items.maxStack(it.id);
+    if (max > 1) for (let i = from; i < to && n > 0; i++) {
+      const s = arr[i];
+      if (s && s.id === it.id && s.count < max) { const k = Math.min(n, max - s.count); s.count += k; n -= k; }
+    }
+    for (let i = from; i < to && n > 0; i++) if (!arr[i]) { const k = Math.min(n, max); arr[i] = { id: it.id, count: k, dur: it.dur }; n -= k; }
+    return n;
+  }
+  // Быстрое перекладывание (второй тап по выбранной ячейке): в сундук/печь и обратно, между сумкой и панелью
+  function quickMove(arr, i) {
+    const it = arr[i];
+    if (!it) return;
+    let left = it.count;
+    if (arr !== inv.slots) left = addInto(inv.slots, 0, 36, it);
+    else if (invMode === 'chest' && invTile) left = addInto(invTile.slots, 0, 27, it);
+    else if (invMode === 'furnace' && invTile) {
+      if (Items.SMELT[it.id] !== undefined) left = addInto(invTile.slots, 0, 1, it);
+      else if (Items.fuel(it.id) > 0) left = addInto(invTile.slots, 1, 2, it);
+    } else left = i < 9 ? addInto(inv.slots, 9, 36, it) : addInto(inv.slots, 0, 9, it);
+    if (left <= 0) arr[i] = null; else it.count = left;
+  }
 
   function makeSlot(arr, i, kind) {
     const el = document.createElement('div');
@@ -172,44 +226,137 @@
     return el;
   }
   function onSlot(arr, i, kind) {
+    selRecipe = null;
     if (!picked) {
       if (arr[i]) picked = { arr, i };
       else if (kind === 'hb') selected = i;
-    } else if (picked.arr === arr && picked.i === i) { picked = null; if (kind === 'hb') selected = i; }
+    } else if (picked.arr === arr && picked.i === i) { quickMove(arr, i); picked = null; if (kind === 'hb') selected = i; }
     else if (kind === 'out') picked = null;
-    else { Items.moveSlot(picked.arr, picked.i, arr, i); picked = null; }
+    else { Items.moveSlot(picked.arr, picked.i, arr, i); picked = null; if (kind === 'hb') selected = i; }
     syncInv();
   }
+
   function syncInv() {
     for (const s of slotEls) {
       paintSlot(s.el, s.arr[s.i], !creative || s.arr !== inv.slots);
       s.el.classList.toggle('picked', !!picked && picked.arr === s.arr && picked.i === s.i);
-      s.el.classList.toggle('sel', s.kind === 'hb' && s.i === selected);
     }
     for (const r of recipeEls) {
       const can = inv.canCraft(r.r);
       r.el.classList.toggle('no', !can);
-      r.el.style.order = can ? 0 : 1;
-      r.r.in.forEach(([id, n], k) => {
-        const have = inv.count(id);
-        r.counts[k].textContent = have + '/' + n;
-        r.counts[k].parentNode.classList.toggle('miss', have < n);
-      });
+      r.el.classList.toggle('picked', selRecipe === r.r);
     }
     if (furnaceEls && invTile) {
       furnaceEls.flame.style.height = (invTile.burnMax ? Math.max(0, invTile.burn / invTile.burnMax) * 100 : 0) + '%';
       furnaceEls.arrow.style.width = Math.min(100, invTile.cook / Items.SMELT_TIME * 100) + '%';
     }
-    $('btn-drop').disabled = !picked;
+    // Нижняя строка: рецепт или выбранный предмет
+    const info = $('inv-info'), ing = $('inv-ing'), bc = $('btn-craft'), bd = $('btn-drop');
+    if (selRecipe) {
+      info.textContent = Items.name(selRecipe.out[0]) + (selRecipe.out[1] > 1 ? ' ×' + selRecipe.out[1] : '');
+      ing.innerHTML = '';
+      for (const [id, n] of selRecipe.in) {
+        const have = inv.count(id);
+        const sp = document.createElement('span');
+        sp.className = have < n ? 'miss' : '';
+        sp.innerHTML = `<img alt="" src="${iconOf(id)}">${have}/${n}`;
+        sp.title = Items.name(id);
+        ing.appendChild(sp);
+      }
+      bc.classList.remove('hidden'); bc.disabled = !inv.canCraft(selRecipe);
+      bd.classList.add('hidden');
+    } else {
+      ing.innerHTML = '';
+      bc.classList.add('hidden');
+      bd.classList.remove('hidden');
+      const it = picked && picked.arr[picked.i];
+      bd.disabled = !it;
+      info.textContent = it ? Items.name(it.id) + '. Нажми на ячейку, чтобы переложить, или ещё раз, чтобы перенести быстро'
+        : (invSection === 'catalog' ? 'Нажми на предмет: он попадёт в выбранную ячейку панели внизу'
+          : invSection === 'craft' || invSection === 'table' ? 'Выбери предмет, чтобы увидеть, что нужно для крафта'
+            : invSection === 'furnace' ? 'Сверху — что плавить, снизу — топливо, справа — результат' : 'Нажми на предмет, затем на ячейку');
+    }
     renderHotbar();
   }
 
   function craft(r) {
-    if (!inv.canCraft(r)) return;
+    if (!r || !inv.canCraft(r)) return;
     for (const [id, n] of r.in) inv.remove(id, n);
     const t = Items.tool(r.out[0]);
     const left = inv.add(r.out[0], r.out[1], t ? t.dur : undefined);
     if (left > 0) throwItem(r.out[0], left, t ? t.dur : undefined);
+    syncInv();
+  }
+
+  function tabButton(iconUrl, title, active, onTap) {
+    const b = document.createElement('button');
+    b.className = 'inv-tab' + (active ? ' on' : '');
+    b.innerHTML = `<img alt="" src="${iconUrl}">`;
+    b.title = title; b.setAttribute('aria-label', title);
+    b.addEventListener('click', onTap);
+    return b;
+  }
+
+  // Перерисовать содержимое экрана для текущего раздела и категории
+  function renderInv() {
+    slotEls = []; recipeEls = []; furnaceEls = null;
+    const content = $('inv-content'), lt = $('inv-tabs-left'), rt = $('inv-tabs-right');
+    content.innerHTML = ''; lt.innerHTML = ''; rt.innerHTML = '';
+    for (const id of sectionList()) {
+      rt.appendChild(tabButton(SECTIONS[id].icon(), SECTIONS[id].name, id === invSection, () => { invSection = id; invCat = 0; selRecipe = null; renderInv(); }));
+    }
+    const grid = document.createElement('div');
+    grid.className = 'inv-grid';
+    let cats = null;
+    if (invSection === 'catalog') {
+      cats = CATS;
+      for (const id of CATS[invCat].ids) {
+        const el = document.createElement('div');
+        el.className = 'islot';
+        el.innerHTML = `<img alt="" src="${iconOf(id)}">`;
+        el.addEventListener('click', () => {
+          const t = Items.tool(id);
+          inv.slots[selected] = { id, count: 1, dur: t ? t.dur : undefined };
+          picked = null;
+          syncInv();
+          $('inv-info').textContent = Items.name(id);
+        });
+        grid.appendChild(el);
+      }
+    } else if (invSection === 'craft' || invSection === 'table') {
+      const list = Items.RECIPES.filter((r) => invSection === 'table' || !r.table);
+      cats = RCATS.filter((c) => list.some(c.test));
+      if (invCat >= cats.length) invCat = 0;
+      for (const r of list) {
+        if (cats.length > 1 && !cats[invCat].test(r)) continue;
+        const el = document.createElement('div');
+        el.className = 'islot rslot';
+        el.innerHTML = `<img alt="" src="${iconOf(r.out[0])}">` + (r.out[1] > 1 ? `<span class="cnt">${r.out[1]}</span>` : '');
+        el.addEventListener('click', () => { picked = null; selRecipe = r; syncInv(); });
+        recipeEls.push({ el, r });
+        grid.appendChild(el);
+      }
+      if (cats.length < 2) cats = null;
+    } else if (invSection === 'chest') {
+      for (let i = 0; i < 27; i++) grid.appendChild(makeSlot(invTile.slots, i, 'chest'));
+    } else if (invSection === 'inv') {
+      for (let i = 9; i < 36; i++) grid.appendChild(makeSlot(inv.slots, i, 'inv'));
+    }
+    if (invSection === 'furnace') {
+      const f = document.createElement('div');
+      f.className = 'furnace';
+      const c1 = document.createElement('div'); c1.className = 'fcol';
+      const flame = document.createElement('div'); flame.className = 'flame'; flame.innerHTML = '<i></i>';
+      c1.append(makeSlot(invTile.slots, 0, 'in'), flame, makeSlot(invTile.slots, 1, 'fuel'));
+      const arrow = document.createElement('div'); arrow.className = 'arrow'; arrow.innerHTML = '<i></i>';
+      const c2 = document.createElement('div'); c2.className = 'fcol';
+      c2.append(makeSlot(invTile.slots, 2, 'out'));
+      f.append(c1, arrow, c2);
+      content.appendChild(f);
+      furnaceEls = { flame: flame.firstChild, arrow: arrow.firstChild };
+    } else content.appendChild(grid);
+    if (cats) cats.forEach((c, k) => lt.appendChild(tabButton(c.icon(), c.name, k === invCat, () => { invCat = k; selRecipe = null; renderInv(); })));
+    content.scrollTop = 0;
     syncInv();
   }
 
@@ -218,94 +365,25 @@
     state = 'inventory';
     invMode = typeof mode === 'string' ? mode : 'craft';
     invTile = tile || null;
-    picked = null; slotEls = []; recipeEls = []; furnaceEls = null;
+    picked = null; selRecipe = null; invCat = 0;
+    invSection = sectionList()[0];
     controls.reset();
-    const left = $('inv-left'), grid = $('inv-grid'), hb = $('inv-hotbar');
-    left.innerHTML = ''; grid.innerHTML = ''; hb.innerHTML = '';
-    const catalog = creative && invMode === 'craft';
-    grid.style.display = catalog ? 'none' : '';
-    for (let i = 9; i < 36 && !catalog; i++) grid.appendChild(makeSlot(inv.slots, i, 'inv'));
-    for (let i = 0; i < 9; i++) hb.appendChild(makeSlot(inv.slots, i, 'hb'));
-    let title = 'Инвентарь', sub = 'Крафт', help = 'Нажми на предмет, затем на ячейку, чтобы переложить. «Выбросить» кидает выбранный предмет на землю.';
-
-    if (catalog) {
-      title = 'Все блоки и предметы'; sub = 'Каталог';
-      help = 'Нажми на предмет в каталоге, и он попадёт в выбранную ячейку панели.';
-      const g = document.createElement('div');
-      g.className = 'inv-grid';
-      for (const id of Items.CATALOG) {
-        const el = document.createElement('div');
-        el.className = 'islot';
-        el.innerHTML = `<img alt="" src="${Items.icon(id)}">`;
-        el.addEventListener('click', () => {
-          const t = Items.tool(id);
-          inv.slots[selected] = { id, count: 1, dur: t ? t.dur : undefined };
-          picked = null;
-          syncInv();
-          $('inv-left-title').textContent = Items.name(id);
-        });
-        g.appendChild(el);
-      }
-      left.appendChild(g);
-    } else if (invMode === 'craft' || invMode === 'table') {
-      if (invMode === 'table') { title = 'Верстак'; sub = 'Крафт: все рецепты'; } else sub = 'Крафт (больше рецептов на верстаке)';
-      const list = document.createElement('div');
-      list.style.cssText = 'display:flex;flex-direction:column';
-      for (const r of Items.RECIPES) {
-        if (r.table && invMode !== 'table') continue;
-        const el = document.createElement('div');
-        el.className = 'recipe';
-        el.innerHTML = `<img alt="" src="${Items.icon(r.out[0])}"><div class="rname">${Items.name(r.out[0])}${r.out[1] > 1 ? ` <b>×${r.out[1]}</b>` : ''}</div><div class="rin"></div>`;
-        const counts = [];
-        for (const [id] of r.in) {
-          const sp = document.createElement('span');
-          sp.innerHTML = `<img alt="" src="${Items.icon(id)}"><i></i>`;
-          sp.title = Items.name(id);
-          counts.push(sp.lastChild);
-          el.lastChild.appendChild(sp);
-        }
-        el.addEventListener('click', () => craft(r));
-        recipeEls.push({ el, r, counts });
-        list.appendChild(el);
-      }
-      left.appendChild(list);
-    } else if (invMode === 'chest') {
-      title = 'Сундук'; sub = 'Содержимое сундука';
-      const g = document.createElement('div');
-      g.className = 'inv-grid';
-      for (let i = 0; i < 27; i++) g.appendChild(makeSlot(tile.slots, i, 'chest'));
-      left.appendChild(g);
-    } else if (invMode === 'furnace') {
-      title = 'Печь'; sub = 'Сверху — что плавить, снизу — топливо';
-      help = 'Положи руду, песок или сырое мясо наверх, а уголь или дерево вниз. Готовое появится справа.';
-      const f = document.createElement('div');
-      f.className = 'furnace';
-      const c1 = document.createElement('div'); c1.className = 'fcol';
-      const flame = document.createElement('div'); flame.className = 'flame'; flame.innerHTML = '<i></i>';
-      c1.append(makeSlot(tile.slots, 0, 'in'), flame, makeSlot(tile.slots, 1, 'fuel'));
-      const arrow = document.createElement('div'); arrow.className = 'arrow'; arrow.innerHTML = '<i></i>';
-      const c2 = document.createElement('div'); c2.className = 'fcol';
-      c2.append(makeSlot(tile.slots, 2, 'out'));
-      f.append(c1, arrow, c2);
-      left.appendChild(f);
-      furnaceEls = { flame: flame.firstChild, arrow: arrow.firstChild };
-    }
-    $('inv-title').textContent = title;
-    $('inv-left-title').textContent = sub;
-    $('inv-help').textContent = help;
-    syncInv();
+    renderInv();
     show('screen-inv');
+    $('hud').classList.add('inv-open');
   }
   function closeInventory() {
     if (state !== 'inventory') return;
     state = 'game';
-    picked = null; invTile = null; furnaceEls = null;
+    picked = null; invTile = null; furnaceEls = null; selRecipe = null;
     controls.reset();
+    $('hud').classList.remove('inv-open');
     show(null);
     selectSlot(selected);
   }
-  tap('btn-inv', () => openInventory('craft'));
+  tap('btn-inv', () => { if (state === 'inventory') closeInventory(); else openInventory('craft'); });
   tap('btn-inv-close', closeInventory);
+  tap('btn-craft', () => craft(selRecipe));
   tap('btn-drop', () => { if (picked) { dropSlot(picked.arr, picked.i); picked = null; syncInv(); } });
   controls.onInventoryKey = () => { if (state === 'game') openInventory('craft'); else if (state === 'inventory') closeInventory(); };
 
@@ -886,7 +964,7 @@
       ents.update(dt, { player, R, onPickup });
       tickFurnaces(dt);
       if (!creative) time = (time + dt / DAY_LEN) % 1;
-      if (state === 'inventory' && furnaceEls) syncInv();
+      if (state === 'inventory' && (furnaceEls || invSection === 'inv')) syncInv();
     }
 
     world.update(player.pos[0], player.pos[2], R, 2, 2);
