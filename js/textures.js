@@ -2,7 +2,9 @@
 // CraftMine PE — процедурные текстуры 16x16 (атлас 256x256)
 (function (CM) {
   const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'water',
-    'log_side', 'log_top', 'leaves', 'bedrock', 'gravel'];
+    'log_side', 'log_top', 'leaves', 'bedrock', 'gravel', 'planks', 'cobblestone',
+    'glass', 'bricks', 'birch_side', 'birch_top', 'outline',
+    'crack_0', 'crack_1', 'crack_2', 'crack_3'];
   const TILES = {};
   NAMES.forEach((n, i) => { TILES[n] = i; });
 
@@ -130,6 +132,80 @@
     return vary([128, 124, 122], 0.12);
   });
 
+  paint('planks', (x, y) => {
+    const row = Math.floor(y / 4);
+    const seam = [3, 11, 7, 14][row];
+    let c = mul([172, 132, 82], 0.9 + ((row * 37) % 5) * 0.04);
+    if (y % 4 === 3) return mul(c, 0.68);
+    if (x === seam) return mul(c, 0.75);
+    if (rand() < 0.15) c = mul(c, 0.9);
+    return vary(c, 0.04);
+  });
+
+  // булыжник: ячейки Вороного с тёмным раствором между камнями
+  const pts = [];
+  for (let i = 0; i < 11; i++) pts.push([rand() * 16, rand() * 16, 0.75 + rand() * 0.35]);
+  paint('cobblestone', (x, y) => {
+    let d1 = 1e9, d2 = 1e9, best = 0;
+    for (const p of pts) {
+      for (let ox = -16; ox <= 16; ox += 16) for (let oy = -16; oy <= 16; oy += 16) {
+        const d = Math.hypot(x + 0.5 - p[0] - ox, y + 0.5 - p[1] - oy);
+        if (d < d1) { d2 = d1; d1 = d; best = p[2]; } else if (d < d2) d2 = d;
+      }
+    }
+    if (d2 - d1 < 1.1) return vary([70, 70, 74], 0.08);
+    return vary(mul([132, 132, 136], best), 0.06);
+  });
+
+  paint('glass', (x, y) => {
+    if (x === 0 || y === 0 || x === 15 || y === 15) return [206, 228, 236, 255];
+    if ((x - y === 3 || x - y === 4) && x > 4 && x < 13) return [255, 255, 255, 170];
+    if (x === 2 && y > 9 && y < 13) return [255, 255, 255, 150];
+    return [200, 230, 240, 28];
+  });
+
+  paint('bricks', (x, y) => {
+    const row = Math.floor(y / 4);
+    const off = row % 2 ? 4 : 0;
+    if (y % 4 === 3 || (x + off) % 8 === 7) return vary([188, 180, 168], 0.05);
+    const id = Math.floor((x + off) / 8) + row * 3;
+    return vary(mul([156, 74, 54], 0.9 + (id % 3) * 0.06), 0.06);
+  });
+
+  const marks = [];
+  for (let i = 0; i < 7; i++) marks.push([Math.floor(rand() * 16), Math.floor(rand() * 16), 2 + Math.floor(rand() * 4)]);
+  paint('birch_side', (x, y) => {
+    for (const m of marks) if (y === m[1] && x >= m[0] && x < m[0] + m[2]) return vary([44, 40, 36], 0.1);
+    return vary([222, 220, 208], 0.04);
+  });
+
+  paint('birch_top', (x, y) => {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (d > 6.5) return vary([222, 220, 208], 0.05);
+    return vary(Math.floor(d) % 2 === 0 ? [206, 186, 140] : [184, 164, 118], 0.05);
+  });
+
+  paint('outline', () => [0, 0, 0, 255]);
+
+  // трещины: случайные ломаные из центра, каждая стадия добавляет пикселей
+  const crackPx = [];
+  const seen = new Set();
+  for (let line = 0; line < 9; line++) {
+    let x = 6 + rand() * 4, y = 6 + rand() * 4;
+    const a = rand() * Math.PI * 2;
+    for (let s = 0; s < 9; s++) {
+      x += Math.cos(a + (rand() - 0.5) * 1.6); y += Math.sin(a + (rand() - 0.5) * 1.6);
+      const px = Math.floor(x), py = Math.floor(y);
+      if (px < 0 || py < 0 || px > 15 || py > 15) break;
+      const k = py * 16 + px;
+      if (!seen.has(k)) { seen.add(k); crackPx.push(k); }
+    }
+  }
+  for (let st = 0; st < 4; st++) {
+    const on = new Set(crackPx.slice(0, Math.ceil(crackPx.length * (st + 1) / 4)));
+    paint('crack_' + st, (x, y) => (on.has(y * 16 + x) ? [20, 20, 20, 210] : [0, 0, 0, 0]));
+  }
+
   function tileURL(name, scale) {
     const s = scale || 1;
     const c = document.createElement('canvas');
@@ -141,6 +217,43 @@
     return c.toDataURL();
   }
 
+  // Изометрическая иконка блока (для панели и меню)
+  function blockIcon(tex, size) {
+    const S = size || 48, h = S / 2;
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    const face = (tile, dark) => {
+      const f = document.createElement('canvas');
+      f.width = f.height = TILE;
+      const fx = f.getContext('2d');
+      fx.drawImage(canvas, (tile % PER_ROW) * TILE, Math.floor(tile / PER_ROW) * TILE, TILE, TILE, 0, 0, TILE, TILE);
+      if (dark) { fx.globalCompositeOperation = 'source-atop'; fx.fillStyle = `rgba(0,0,0,${dark})`; fx.fillRect(0, 0, TILE, TILE); }
+      return f;
+    };
+    const k = 1 / TILE, e = 1.02;
+    g.setTransform(h * k * e, -S / 4 * k * e, h * k * e, S / 4 * k * e, 0, S / 4);
+    g.drawImage(face(tex[0], 0), 0, 0);
+    g.setTransform(h * k * e, S / 4 * k * e, 0, h * k * e, 0, S / 4);
+    g.drawImage(face(tex[2], 0.22), 0, 0);
+    g.setTransform(h * k * e, -S / 4 * k * e, 0, h * k * e, h, S / 2);
+    g.drawImage(face(tex[2], 0.42), 0, 0);
+    return c.toDataURL();
+  }
+
+  // Пиксельная иконка по маске: символ -> цвет
+  function pixelIcon(rows, palette, scale) {
+    const w = rows[0].length, hgt = rows.length, s = scale || 1;
+    const c = document.createElement('canvas');
+    c.width = w * s; c.height = hgt * s;
+    const g = c.getContext('2d');
+    rows.forEach((r, y) => [...r].forEach((ch, x) => {
+      if (palette[ch]) { g.fillStyle = palette[ch]; g.fillRect(x * s, y * s, s, s); }
+    }));
+    return c.toDataURL();
+  }
+
   CM.TILES = TILES;
-  CM.Textures = { atlas: canvas, tile: TILE, perRow: PER_ROW, tileURL };
+  CM.Textures = { atlas: canvas, tile: TILE, perRow: PER_ROW, tileURL, blockIcon, pixelIcon };
 })(window.CM);

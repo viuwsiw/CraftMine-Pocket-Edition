@@ -6,8 +6,6 @@
       this.dpad = dpad;
       this.lookZone = lookZone;
       this.dpadPointers = new Map(); // pointerId -> direction
-      this.lookPointer = null;
-      this.lookLast = [0, 0];
       this.lookDX = 0;
       this.lookDY = 0;
       this.keys = new Set();
@@ -56,33 +54,61 @@
       d.addEventListener('lostpointercapture', end);
     }
 
+    // Панель обзора: свайп — камера, короткий тап — поставить блок, удержание — ломать
     _bindLook() {
       const z = this.lookZone;
+      this.touch = null;   // {id, x, y, sx, sy, t0, mode: 'pending'|'look'|'break'}
+      this.taps = [];
+      this.hover = null;   // позиция мыши (ПК)
       z.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        if (this.lookPointer !== null) return;
-        this.lookPointer = e.pointerId;
-        this.lookLast = [e.clientX, e.clientY];
+        if (e.pointerType === 'mouse' && e.button === 2) { this.taps.push({ x: e.clientX, y: e.clientY }); return; }
+        if (this.touch) return;
+        this.touch = { id: e.pointerId, x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t0: performance.now(), mode: 'pending' };
         try { z.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       });
       z.addEventListener('pointermove', (e) => {
-        if (e.pointerId !== this.lookPointer) return;
+        if (e.pointerType === 'mouse') this.hover = { x: e.clientX, y: e.clientY };
+        const t = this.touch;
+        if (!t || e.pointerId !== t.id) return;
         e.preventDefault();
-        this.lookDX += e.clientX - this.lookLast[0];
-        this.lookDY += e.clientY - this.lookLast[1];
-        this.lookLast = [e.clientX, e.clientY];
+        if (t.mode === 'pending' && Math.hypot(e.clientX - t.sx, e.clientY - t.sy) > 12) {
+          t.mode = 'look';
+          t.x = e.clientX; t.y = e.clientY;
+        }
+        if (t.mode === 'look') {
+          this.lookDX += e.clientX - t.x;
+          this.lookDY += e.clientY - t.y;
+        }
+        t.x = e.clientX; t.y = e.clientY;
       });
-      const end = (e) => { if (e.pointerId === this.lookPointer) this.lookPointer = null; };
+      const end = (e) => {
+        const t = this.touch;
+        if (!t || e.pointerId !== t.id) return;
+        if (e.type === 'pointerup' && t.mode === 'pending' && performance.now() - t.t0 < 300) this.taps.push({ x: t.sx, y: t.sy });
+        this.touch = null;
+      };
       z.addEventListener('pointerup', end);
       z.addEventListener('pointercancel', end);
       z.addEventListener('lostpointercapture', end);
+      z.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') this.hover = null; });
     }
+
+    // Вызывается каждый кадр: удержание без движения переходит в ломание
+    updateGesture(now) {
+      const t = this.touch;
+      if (t && t.mode === 'pending' && now - t.t0 >= 300) t.mode = 'break';
+      return t && t.mode === 'break' ? t : null;
+    }
+
+    consumeTaps() { const t = this.taps; this.taps = []; return t; }
 
     _bindKeys() {
       window.addEventListener('keydown', (e) => {
         if (e.target && (e.target.tagName === 'INPUT')) return;
         this.keys.add(e.code);
         if (e.code === 'Space') e.preventDefault();
+        if (/^Digit[1-9]$/.test(e.code) && this.onDigit) this.onDigit(+e.code.slice(5) - 1);
       });
       window.addEventListener('keyup', (e) => this.keys.delete(e.code));
       window.addEventListener('blur', () => this.keys.clear());
@@ -90,7 +116,8 @@
 
     reset() {
       this.dpadPointers.clear();
-      this.lookPointer = null;
+      this.touch = null;
+      this.taps = [];
       this.lookDX = this.lookDY = 0;
       this.keys.clear();
       this._refreshDpad();

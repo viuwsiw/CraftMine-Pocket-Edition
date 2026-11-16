@@ -20,6 +20,7 @@
     renderDistance: isTouch ? 4 : 6,
     sensitivity: 100,
     autoJump: true,
+    fallDamage: true,
     showCoords: false,
   }, store.get('settings', {}));
 
@@ -38,6 +39,91 @@
   }
 
   const controls = new CM.Controls($('dpad'), $('look-zone'));
+  const Bk = CM.B;
+
+  // ---------- Иконки меню ----------
+  const P = CM.Textures.pixelIcon;
+  $('icon-play').src = CM.Textures.blockIcon(CM.BLOCKS[Bk.GRASS].tex, 96);
+  $('icon-multi').src = P([
+    '................',
+    '..###......###..',
+    '..###......###..',
+    '..###......###..',
+    '................',
+    '.#####....#####.',
+    '#######..#######',
+    '#.###.#..#.###.#',
+    '#.###.#..#.###.#',
+    '..###......###..',
+    '..#.#......#.#..',
+    '..#.#......#.#..',
+    '..#.#......#.#..',
+    '................',
+    '................',
+    '................'], { '#': '#3a3a3c' }, 6);
+  {
+    const rows = [];
+    for (let y = 0; y < 16; y++) {
+      let r = '';
+      for (let x = 0; x < 16; x++) {
+        const dx = x - 7.5, dy = y - 7.5, d = Math.hypot(dx, dy);
+        const a = Math.atan2(dy, dx);
+        const tooth = Math.cos(a * 8) > 0.2;
+        r += (d < 2.6) ? '.' : (d < 5.2 || (tooth && d < 7.4)) ? '#' : '.';
+      }
+      rows.push(r);
+    }
+    $('icon-settings').src = P(rows, { '#': '#3a3a3c' }, 6);
+  }
+
+  function toast(text, ms) {
+    const t = $('toast');
+    t.textContent = text;
+    t.classList.remove('hidden');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => t.classList.add('hidden'), ms || 2200);
+  }
+
+  // ---------- Панель блоков и сердца ----------
+  const HOTBAR = [Bk.STONE, Bk.COBBLE, Bk.DIRT, Bk.GRASS, Bk.PLANKS, Bk.LOG, Bk.GLASS, Bk.BRICKS, Bk.SAND];
+  let selected = 0;
+  {
+    const hb = $('hotbar');
+    HOTBAR.forEach((id, i) => {
+      const s = document.createElement('div');
+      s.className = 'slot';
+      s.innerHTML = `<span class="cnt">∞</span><img alt="" src="${CM.Textures.blockIcon(CM.BLOCKS[id].tex, 48)}">`;
+      s.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); selectSlot(i); });
+      hb.appendChild(s);
+    });
+  }
+  function selectSlot(i) {
+    selected = (i + HOTBAR.length) % HOTBAR.length;
+    $('hotbar').querySelectorAll('.slot').forEach((s, k) => s.classList.toggle('sel', k === selected));
+    const n = $('item-name');
+    n.textContent = CM.BLOCKS[HOTBAR[selected]].name;
+    n.classList.add('show');
+    clearTimeout(selectSlot.t);
+    selectSlot.t = setTimeout(() => n.classList.remove('show'), 1200);
+  }
+  selectSlot(0);
+  controls.onDigit = (i) => { if (state === 'game') selectSlot(i); };
+  window.addEventListener('wheel', (e) => { if (state === 'game') selectSlot(selected + Math.sign(e.deltaY)); }, { passive: true });
+
+  const HEART = ['.##.##.', '#ab#bb#', '#abbbb#', '#bbbbb#', '.#bbb#.', '..#b#..', '...#...'];
+  const heartFull = P(HEART, { '#': '#2a0a0a', a: '#ffb3b3', b: '#e0262b' }, 2);
+  const heartEmpty = P(HEART, { '#': '#2a0a0a', a: '#4a2222', b: '#4a2222' }, 2);
+  const heartHalf = P(HEART.map((r) => r.slice(0, 4).replace(/b/g, 'b') + r.slice(4).replace(/[ab]/g, 'c')), { '#': '#2a0a0a', a: '#ffb3b3', b: '#e0262b', c: '#4a2222' }, 2);
+  for (let i = 0; i < 10; i++) $('hearts').appendChild(document.createElement('i'));
+  let shownHealth = -1;
+  function renderHearts(hp) {
+    if (hp === shownHealth) return;
+    shownHealth = hp;
+    $('hearts').querySelectorAll('i').forEach((el, i) => {
+      const v = hp - i * 2;
+      el.style.backgroundImage = `url(${v >= 2 ? heartFull : v === 1 ? heartHalf : heartEmpty})`;
+    });
+  }
 
   // ---------- Состояние ----------
   let state = 'menu';       // menu | loading | game | paused
@@ -56,16 +142,17 @@
   }
 
   // ---------- Экраны ----------
-  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause'];
+  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
-    $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused'));
+    $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused' || state === 'dead'));
   }
 
   function tap(id, fn) { $(id).addEventListener('click', (e) => { e.preventDefault(); fn(e); }); }
 
   // Главный экран
   tap('btn-play', () => { renderWorldList(); show('screen-worlds'); });
+  tap('btn-multi', () => toast('Мультиплеер появится в следующих версиях'));
   tap('btn-settings', () => { settingsReturn = 'menu'; openSettings(); });
 
   // Список миров
@@ -101,6 +188,7 @@
         e.stopPropagation();
         if (confirm(`Удалить мир «${w.name}»?`)) {
           saveWorlds(loadWorlds().filter((x) => x.id !== w.id));
+          try { localStorage.removeItem('craftmine.edits.' + w.id); } catch (_) { /* ignore */ }
           renderWorldList();
         }
       });
@@ -150,12 +238,14 @@
     $('set-sens').value = settings.sensitivity;
     $('val-sens').textContent = settings.sensitivity;
     $('set-autojump').checked = settings.autoJump;
+    $('set-falldmg').checked = settings.fallDamage;
     $('set-coords').checked = settings.showCoords;
   }
   function openSettings() { syncSettingsUI(); show('screen-settings'); }
   $('set-rd').addEventListener('input', (e) => { settings.renderDistance = +e.target.value; syncSettingsUI(); });
   $('set-sens').addEventListener('input', (e) => { settings.sensitivity = +e.target.value; syncSettingsUI(); });
   $('set-autojump').addEventListener('change', (e) => { settings.autoJump = e.target.checked; });
+  $('set-falldmg').addEventListener('change', (e) => { settings.fallDamage = e.target.checked; });
   $('set-coords').addEventListener('change', (e) => { settings.showCoords = e.target.checked; });
   tap('btn-settings-done', () => {
     store.set('settings', settings);
@@ -181,6 +271,17 @@
   tap('btn-pause', pause);
   tap('btn-resume', resume);
   tap('btn-pause-settings', () => { settingsReturn = 'pause'; openSettings(); });
+  tap('btn-respawn', () => {
+    const f = world.findSpawn();
+    const sp = world.safeSpot(f.x, f.z);
+    player.pos = [sp.x, sp.y, sp.z];
+    player.vel = [0, 0, 0];
+    player.health = 20;
+    player.fallTop = null;
+    savePlayer();
+    resume();
+  });
+  tap('btn-dead-quit', () => $('btn-quit').click());
   tap('btn-quit', () => {
     savePlayer();
     if (world) world.dispose();
@@ -222,11 +323,20 @@
     updateRecord(rec);
     if (menuWorld) { menuWorld.dispose(); menuWorld = null; }
     world = new CM.World(renderer, rec.seed, rec.type);
+    world.importEdits(store.get('edits.' + rec.id, {}));
     player = new CM.Player(PLAYER_NAME);
+    player.onHurt = () => {
+      const h = $('hurt');
+      h.classList.add('on');
+      setTimeout(() => h.classList.remove('on'), 120);
+      if (navigator.vibrate) try { navigator.vibrate(60); } catch (_) { /* ignore */ }
+    };
+    breaking = null;
     if (rec.player) {
       player.pos = [rec.player.x, rec.player.y, rec.player.z];
       player.yaw = rec.player.yaw || 0;
       player.pitch = rec.player.pitch || 0;
+      player.health = rec.player.health || 20;
       player.needsGround = false;
     } else {
       const sp = world.findSpawn();
@@ -249,12 +359,57 @@
 
   function savePlayer() {
     if (!current || !player || player.needsGround) return;
-    current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch };
+    current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health };
     current.lastPlayed = Date.now();
     updateRecord(current);
+    if (world) store.set('edits.' + current.id, world.exportEdits());
   }
 
   // ---------- Игровой цикл ----------
+  let breaking = null;  // {x,y,z,progress}
+  let swing = 0;        // анимация взмаха рукой, 0..1
+  const REACH = 6;
+
+  function pick(cam, sx, sy) {
+    return world.raycast([cam.x, cam.y, cam.z], renderer.screenRay(cam, sx, sy), REACH);
+  }
+
+  function placeAt(cam, sx, sy) {
+    const hit = pick(cam, sx, sy);
+    if (!hit || (!hit.n[0] && !hit.n[1] && !hit.n[2])) return;
+    const x = hit.x + hit.n[0], y = hit.y + hit.n[1], z = hit.z + hit.n[2];
+    const cur = world.getBlock(x, y, z);
+    if (cur !== Bk.AIR && cur !== Bk.WATER) return;
+    if (player.intersectsBlock(x, y, z)) return;
+    if (world.setBlock(x, y, z, HOTBAR[selected])) swing = 1;
+  }
+
+  // Обработка ломания/установки, возвращает данные для подсветки
+  function interact(dt, cam, now) {
+    const extras = { selection: null, crack: null };
+    for (const t of controls.consumeTaps()) placeAt(cam, t.x, t.y);
+    const g = controls.updateGesture(now);
+    const aim = g || (controls.hover && !controls.touch ? controls.hover : null);
+    const hit = aim ? pick(cam, aim.x, aim.y) : null;
+    if (hit) extras.selection = hit;
+    if (g && hit) {
+      if (!breaking || breaking.x !== hit.x || breaking.y !== hit.y || breaking.z !== hit.z) breaking = { x: hit.x, y: hit.y, z: hit.z, progress: 0 };
+      const hard = CM.BLOCKS[hit.id].hardness;
+      if (hard > 0) {
+        breaking.progress += dt / hard;
+        extras.crack = { x: hit.x, y: hit.y, z: hit.z, stage: Math.min(3, Math.floor(breaking.progress * 4)) };
+        if (breaking.progress >= 1) {
+          world.setBlock(hit.x, hit.y, hit.z, Bk.AIR);
+          breaking = null;
+          extras.crack = null;
+        }
+      }
+      if (swing <= 0) swing = 1;
+    } else breaking = null;
+    swing = Math.max(0, swing - dt * 3.5);
+    return extras;
+  }
+
   let last = performance.now();
   let fpsFrames = 0, fpsTime = 0, fps = 0;
 
@@ -283,12 +438,15 @@
       renderer.render(null, null, R, false);
       if (progress >= 1) {
         if (player.needsGround) {
-          player.pos[1] = world.groundY(player.pos[0], player.pos[2]);
+          const sp = world.safeSpot(player.pos[0], player.pos[2]);
+          player.pos = [sp.x, sp.y, sp.z];
           player.needsGround = false;
         }
         state = 'game';
         lastSave = now;
         controls.reset();
+        shownHealth = -1;
+        renderHearts(player.health);
         show(null);
         $('debug').classList.toggle('hidden', !settings.showCoords);
       }
@@ -300,7 +458,15 @@
       const k = 0.0052 * settings.sensitivity / 100;
       player.look(look[0] * k, look[1] * k);
       if (world.isLoadedAt(player.pos[0], player.pos[2])) {
+        const hpBefore = player.health;
         player.update(dt, controls.state(), world, { autoJump: settings.autoJump });
+        if (!settings.fallDamage && player.health < hpBefore) player.health = hpBefore;
+      }
+      renderHearts(player.health);
+      if (player.health <= 0) {
+        state = 'dead';
+        controls.reset();
+        show('screen-dead');
       }
       if (now - lastSave > 10000) { savePlayer(); lastSave = now; }
       if (settings.showCoords) {
@@ -312,7 +478,17 @@
 
     // game или paused: мир продолжает подгружаться и рисоваться
     world.update(player.pos[0], player.pos[2], R, 2, 2);
-    renderer.render(world, player.camera(), R, player.headInWater);
+    const cam = player.camera();
+    const extras = state === 'game' ? interact(dt, cam, now) : { selection: null, crack: null };
+    const hs = Math.hypot(player.vel[0], player.vel[2]);
+    extras.hand = {
+      tex: CM.BLOCKS[HOTBAR[selected]].tex,
+      swing,
+      bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs),
+      bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs),
+      light: player.headInWater ? 0.7 : 1,
+    };
+    renderer.render(world, cam, R, player.headInWater, extras);
   }
 
   window.addEventListener('resize', () => renderer.resize());
@@ -322,5 +498,5 @@
   show('screen-menu');
   requestAnimationFrame(frame);
 
-  CM.debug = { get world() { return world; }, get player() { return player; }, get state() { return state; } };
+  CM.debug = { get world() { return world; }, get player() { return player; }, get state() { return state; }, selectSlot, renderer, pick: (x, y) => pick(player.camera(), x, y) };
 })(window.CM);

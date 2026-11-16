@@ -21,12 +21,13 @@
     <div class="logo-wrap">
       <h1 class="logo">CraftMine</h1>
       <div class="subtitle">Pocket Edition</div>
+      <div class="version-top">v0.0.1 alpha</div>
     </div>
-    <div class="menu-buttons">
-      <button class="btn big" id="btn-play">Играть</button>
-      <button class="btn" id="btn-settings">Настройки</button>
+    <div class="tiles">
+      <button class="tile locked" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""><span class="tile-badge">скоро</span></button>
+      <button class="tile" id="btn-play"><span class="tile-label">Играть</span><img class="tile-icon" id="icon-play" alt=""></button>
+      <button class="tile" id="btn-settings"><span class="tile-label">Настройки</span><img class="tile-icon" id="icon-settings" alt=""></button>
     </div>
-    <div class="version">v0.0.1 alpha</div>
     <div class="player-tag">Игрок: <span>Nikita</span></div>
   </section>
 
@@ -80,6 +81,7 @@
         <input id="set-sens" type="range" min="30" max="250" step="10">
       </label>
       <label class="check"><input id="set-autojump" type="checkbox"> Автопрыжок</label>
+      <label class="check"><input id="set-falldmg" type="checkbox"> Урон от падения</label>
       <label class="check"><input id="set-coords" type="checkbox"> Показывать координаты и FPS</label>
     </div>
     <div class="row-buttons">
@@ -99,7 +101,12 @@
   <!-- Игровой интерфейс -->
   <section id="hud" class="hidden">
     <div id="look-zone"></div>
-    <div id="crosshair"></div>
+    <div id="hurt"></div>
+    <div id="bottom-bar">
+      <div id="item-name"></div>
+      <div id="hearts"></div>
+      <div id="hotbar"></div>
+    </div>
     <div id="debug" class="hidden"></div>
     <button id="btn-pause" aria-label="Пауза"><i></i><i></i></button>
     <div id="dpad">
@@ -126,6 +133,17 @@
     </div>
   </section>
 
+  <!-- Смерть -->
+  <section id="screen-dead" class="screen dead-bg hidden">
+    <div class="dead-title">Вы погибли!</div>
+    <div class="pause-info">Nikita упал с большой высоты</div>
+    <div class="menu-buttons">
+      <button class="btn big" id="btn-respawn">Возродиться</button>
+      <button class="btn" id="btn-dead-quit">Выйти в меню</button>
+    </div>
+  </section>
+
+  <div id="toast" class="hidden"></div>
   <div id="error" class="hidden"></div>
 
   <script src="js/noise.js"></script>

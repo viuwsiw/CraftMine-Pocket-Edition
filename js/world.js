@@ -5,7 +5,8 @@
   const H = 96;       // высота мира
   const SEA = 32;     // уровень моря
 
-  const B = { AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5, LOG: 6, LEAVES: 7, BEDROCK: 8, GRAVEL: 9 };
+  const B = { AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5, LOG: 6, LEAVES: 7, BEDROCK: 8, GRAVEL: 9,
+    PLANKS: 10, COBBLE: 11, GLASS: 12, BIRCH: 13, BRICKS: 14 };
   const T = CM.TILES;
   // tex: [верх, низ, бок]
   const BLOCKS = [];
@@ -19,12 +20,22 @@
   BLOCKS[B.LEAVES] = { name: 'Листва', solid: true, opaque: false, tex: [T.leaves, T.leaves, T.leaves] };
   BLOCKS[B.BEDROCK] = { name: 'Коренная порода', solid: true, opaque: true, tex: [T.bedrock, T.bedrock, T.bedrock] };
   BLOCKS[B.GRAVEL] = { name: 'Гравий', solid: true, opaque: true, tex: [T.gravel, T.gravel, T.gravel] };
+  BLOCKS[B.PLANKS] = { name: 'Доски', solid: true, opaque: true, tex: [T.planks, T.planks, T.planks] };
+  BLOCKS[B.COBBLE] = { name: 'Булыжник', solid: true, opaque: true, tex: [T.cobblestone, T.cobblestone, T.cobblestone] };
+  BLOCKS[B.GLASS] = { name: 'Стекло', solid: true, opaque: false, tex: [T.glass, T.glass, T.glass] };
+  BLOCKS[B.BIRCH] = { name: 'Берёза', solid: true, opaque: true, tex: [T.birch_top, T.birch_top, T.birch_side] };
+  BLOCKS[B.BRICKS] = { name: 'Кирпичи', solid: true, opaque: true, tex: [T.bricks, T.bricks, T.bricks] };
+
+  // Время ломания в секундах (0 — нельзя сломать)
+  const HARD = { [B.GRASS]: 0.45, [B.DIRT]: 0.4, [B.SAND]: 0.4, [B.GRAVEL]: 0.45, [B.LEAVES]: 0.2, [B.GLASS]: 0.3,
+    [B.LOG]: 0.8, [B.BIRCH]: 0.8, [B.PLANKS]: 0.75, [B.STONE]: 1.0, [B.COBBLE]: 1.1, [B.BRICKS]: 1.1, [B.BEDROCK]: 0 };
+  BLOCKS.forEach((b, i) => { b.hardness = HARD[i] === undefined ? 0.5 : HARD[i]; });
 
   const OPAQUE = new Uint8Array(256), SOLID = new Uint8Array(256), OCCLUDES = new Uint8Array(256);
   BLOCKS.forEach((b, i) => {
     OPAQUE[i] = b.opaque ? 1 : 0;
     SOLID[i] = b.solid ? 1 : 0;
-    OCCLUDES[i] = b.solid ? 1 : 0; // что даёт затенение (ambient occlusion)
+    OCCLUDES[i] = (b.opaque || i === B.LEAVES) ? 1 : 0; // что даёт затенение (ambient occlusion)
   });
 
   const idx = (x, y, z) => (y * CS + z) * CS + x;
@@ -113,7 +124,8 @@
           if (r >= p) continue;
           const h = this.height(wx, wz);
           if (!flat && (h <= SEA + 1 || h > 68)) continue;
-          const th = 4 + Math.floor(CM.hash3(wx, 91, wz, seed) * 3);
+          const birch = CM.hash3(wx, 53, wz, seed) < 0.3;
+          const th = (birch ? 5 : 4) + Math.floor(CM.hash3(wx, 91, wz, seed) * 3);
           const top = h + th;
           for (let ly = top - 2; ly <= top + 1; ly++) {
             const rad = ly <= top - 1 ? 2 : 1;
@@ -127,7 +139,7 @@
               }
             }
           }
-          for (let y = h + 1; y <= top; y++) set(wx, y, wz, B.LOG, false);
+          for (let y = h + 1; y <= top; y++) set(wx, y, wz, birch ? B.BIRCH : B.LOG, false);
           set(wx, h, wz, B.DIRT, false);
         }
       }
@@ -270,6 +282,78 @@
       this.offsets = null;
       this.offsetsR = -1;
       this.frame = 0;
+      this.edits = new Map(); // ключ чанка -> Map(индекс -> id)
+    }
+
+    importEdits(obj) {
+      for (const k in obj || {}) {
+        const m = new Map(), a = obj[k];
+        for (let i = 0; i < a.length; i += 2) m.set(a[i], a[i + 1]);
+        this.edits.set(k, m);
+      }
+    }
+
+    exportEdits() {
+      const o = {};
+      for (const [k, m] of this.edits) {
+        if (!m.size) continue;
+        const a = [];
+        for (const [i, id] of m) a.push(i, id);
+        o[k] = a;
+      }
+      return o;
+    }
+
+    _applyEdits(ch) {
+      const m = this.edits.get(ch.cx + ',' + ch.cz);
+      if (!m) return;
+      for (const [i, id] of m) {
+        ch.data[i] = id;
+        const y = Math.floor(i / (CS * CS));
+        if (id !== B.AIR && y > ch.maxY) ch.maxY = y;
+      }
+    }
+
+    setBlock(x, y, z, id) {
+      if (y < 0 || y >= H) return false;
+      const cx = Math.floor(x / CS), cz = Math.floor(z / CS);
+      const k = cx + ',' + cz;
+      const ch = this.chunks.get(k);
+      if (!ch) return false;
+      const lx = x - cx * CS, lz = z - cz * CS;
+      const i = idx(lx, y, lz);
+      ch.data[i] = id;
+      if (!this.edits.has(k)) this.edits.set(k, new Map());
+      this.edits.get(k).set(i, id);
+      if (id !== B.AIR && y > ch.maxY) ch.maxY = y;
+      // перестроить чанк и соседей, которых касается блок (включая затенение по диагонали)
+      const xs = [0], zs = [0];
+      if (lx === 0) xs.push(-1); if (lx === CS - 1) xs.push(1);
+      if (lz === 0) zs.push(-1); if (lz === CS - 1) zs.push(1);
+      for (const dx of xs) for (const dz of zs) {
+        const c = this.getChunk(cx + dx, cz + dz);
+        if (c && c.meshed && this.neighborsReady(c.cx, c.cz)) this.meshChunk(c);
+      }
+      return true;
+    }
+
+    // Луч по сетке блоков (Amanatides & Woo). Пропускает воздух и воду.
+    raycast(o, d, maxDist) {
+      let x = Math.floor(o[0]), y = Math.floor(o[1]), z = Math.floor(o[2]);
+      const sx = Math.sign(d[0]), sy = Math.sign(d[1]), sz = Math.sign(d[2]);
+      const tdx = sx ? Math.abs(1 / d[0]) : Infinity, tdy = sy ? Math.abs(1 / d[1]) : Infinity, tdz = sz ? Math.abs(1 / d[2]) : Infinity;
+      let tx = sx ? ((sx > 0 ? x + 1 - o[0] : o[0] - x) * tdx) : Infinity;
+      let ty = sy ? ((sy > 0 ? y + 1 - o[1] : o[1] - y) * tdy) : Infinity;
+      let tz = sz ? ((sz > 0 ? z + 1 - o[2] : o[2] - z) * tdz) : Infinity;
+      let n = [0, 0, 0], t = 0;
+      while (t <= maxDist) {
+        const id = this.getBlock(x, y, z);
+        if (id !== B.AIR && id !== B.WATER) return { x, y, z, n, id };
+        if (tx < ty && tx < tz) { x += sx; t = tx; tx += tdx; n = [-sx, 0, 0]; }
+        else if (ty < tz) { y += sy; t = ty; ty += tdy; n = [0, -sy, 0]; }
+        else { z += sz; t = tz; tz += tdz; n = [0, 0, -sz]; }
+      }
+      return null;
     }
 
     getChunk(cx, cz) { return this.chunks.get(cx + ',' + cz); }
@@ -327,6 +411,7 @@
         if (!this.chunks.has(k)) {
           const ch = new Chunk(cx, cz);
           this.gen.generate(ch);
+          this._applyEdits(ch);
           this.chunks.set(k, ch);
           genBudget--;
           if (performance.now() - t0 > 12) break;
@@ -397,13 +482,24 @@
       return { x: 0.5, z: 0.5 };
     }
 
-    // Высота первого свободного места над землёй (после загрузки чанка)
-    groundY(x, z) {
-      const bx = Math.floor(x), bz = Math.floor(z);
-      for (let y = H - 2; y > 0; y--) {
-        if (SOLID[this.getBlock(bx, y, bz)] || this.getBlock(bx, y, bz) === B.WATER) return y + 1;
+    // Свободное место над землёй (после загрузки чанков): ищет по спирали рядом с точкой
+    safeSpot(x, z) {
+      for (let r = 0; r <= 8; r++) {
+        for (let dz = -r; dz <= r; dz++) for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== r) continue;
+          const bx = Math.floor(x) + dx, bz = Math.floor(z) + dz;
+          for (let y = H - 3; y > 0; y--) {
+            const id = this.getBlock(bx, y, bz);
+            if (id === B.AIR) continue;
+            if ((SOLID[id] && id !== B.LEAVES) || id === B.WATER) {
+              if (!SOLID[this.getBlock(bx, y + 1, bz)] && !SOLID[this.getBlock(bx, y + 2, bz)])
+                return { x: bx + 0.5, y: y + 1, z: bz + 0.5 };
+            }
+            break;
+          }
+        }
       }
-      return this.gen.height(bx, bz) + 1;
+      return { x: Math.floor(x) + 0.5, y: this.gen.height(Math.floor(x), Math.floor(z)) + 1, z: Math.floor(z) + 0.5 };
     }
   }
 

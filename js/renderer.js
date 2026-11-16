@@ -77,6 +77,35 @@ void main() {
     return true;
   }
 
+  // Куб [0,1]^3: углы каждой грани (снаружи: низ-лево, низ-право, верх-право, верх-лево)
+  const CUBE = [
+    { c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]], slot: 2, shade: 0.8 },
+    { c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]], slot: 2, shade: 0.8 },
+    { c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]], slot: 0, shade: 1.0 },
+    { c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]], slot: 1, shade: 0.5 },
+    { c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]], slot: 2, shade: 0.65 },
+    { c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]], slot: 2, shade: 0.65 },
+  ];
+  const QUAD_UV = [[0, 1], [1, 1], [1, 0], [0, 0]];
+  const IDENT = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+  function tileUV(tile) {
+    const st = 1 / CM.Textures.perRow, e = 0.0008;
+    return [(tile % CM.Textures.perRow) * st + e, Math.floor(tile / CM.Textures.perRow) * st + e, st - 2 * e];
+  }
+
+  // Вершины куба; tex — [верх, низ, бок]; xf — преобразование точки [0,1]^3
+  function cubeVerts(tex, xf, light) {
+    const out = new Float32Array(36 * 6);
+    let o = 0;
+    for (const f of CUBE) {
+      const [u0, v0, st] = tileUV(tex[f.slot]);
+      const vs = f.c.map((p, k) => { const q = xf(p); return [q[0], q[1], q[2], u0 + QUAD_UV[k][0] * st, v0 + QUAD_UV[k][1] * st, f.shade * light]; });
+      for (const k of [0, 1, 2, 0, 2, 3]) { out.set(vs[k], o); o += 6; }
+    }
+    return out;
+  }
+
   class Renderer {
     constructor(canvas) {
       this.canvas = canvas;
@@ -127,6 +156,73 @@ void main() {
       gl.frontFace(gl.CCW);
       gl.cullFace(gl.BACK);
       gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      this.dyn = { buf: gl.createBuffer(), count: 0 };
+    }
+
+    _drawDynamic(arr, mode) {
+      const gl = this.gl;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.dyn.buf);
+      gl.bufferData(gl.ARRAY_BUFFER, arr, gl.DYNAMIC_DRAW);
+      this._bind(this.dyn);
+      gl.drawArrays(mode, 0, arr.length / 6);
+    }
+
+    _drawOverlays(ex) {
+      const gl = this.gl;
+      gl.uniform3f(this.u.uOffset, 0, 0, 0);
+      if (ex.crack) {
+        const { x, y, z, stage } = ex.crack;
+        const t = CM.TILES['crack_' + stage];
+        const e = 0.004;
+        const v = cubeVerts([t, t, t], (p) => [x - e + p[0] * (1 + 2 * e), y - e + p[1] * (1 + 2 * e), z - e + p[2] * (1 + 2 * e)], 1);
+        gl.enable(gl.BLEND); gl.depthMask(false); gl.disable(gl.CULL_FACE);
+        gl.uniform1f(this.u.uAlphaTest, 0.01);
+        this._drawDynamic(v, gl.TRIANGLES);
+      }
+      if (ex.selection) {
+        const { x, y, z } = ex.selection;
+        const e = 0.003, [u0, v0] = tileUV(CM.TILES.outline);
+        const P = (a, b, c) => [x - e + a * (1 + 2 * e), y - e + b * (1 + 2 * e), z - e + c * (1 + 2 * e), u0, v0, 0.55];
+        const L = [];
+        for (let i = 0; i < 4; i++) {
+          const a = i & 1, b = i >> 1;
+          L.push(P(0, a, b), P(1, a, b), P(a, 0, b), P(a, 1, b), P(a, b, 0), P(a, b, 1));
+        }
+        const arr = new Float32Array(L.length * 6);
+        L.forEach((v, i) => arr.set(v, i * 6));
+        gl.enable(gl.BLEND); gl.depthMask(false);
+        gl.uniform1f(this.u.uAlphaTest, 0.01);
+        this._drawDynamic(arr, gl.LINES);
+      }
+      gl.depthMask(true);
+      gl.disable(gl.BLEND);
+    }
+
+    // Блок в руке: рисуется в пространстве камеры поверх мира
+    _drawHand(hand) {
+      const gl = this.gl;
+      gl.clear(gl.DEPTH_BUFFER_BIT);
+      const proj = perspective(70 * Math.PI / 180, this.canvas.width / this.canvas.height, 0.05, 10);
+      gl.uniformMatrix4fv(this.u.uProj, false, proj);
+      gl.uniformMatrix4fv(this.u.uView, false, IDENT);
+      gl.uniform3f(this.u.uOffset, 0, 0, 0);
+      gl.uniform1f(this.u.uFogNear, 100);
+      gl.uniform1f(this.u.uFogFar, 200);
+      const sw = Math.sin(hand.swing * Math.PI);
+      const ry = 0.75 - sw * 0.5, rx = 0.18 + sw * 0.6;
+      const cyR = Math.cos(ry), syR = Math.sin(ry), cxR = Math.cos(rx), sxR = Math.sin(rx);
+      const size = 0.36;
+      const px = 0.64 + hand.bobX - sw * 0.2, py = -0.56 + hand.bobY - sw * 0.15, pz = -1.15 - sw * 0.15;
+      const xf = (p) => {
+        let x = (p[0] - 0.5) * size, y = (p[1] - 0.5) * size, z = (p[2] - 0.5) * size;
+        let x1 = x * cyR + z * syR, z1 = -x * syR + z * cyR;
+        let y1 = y * cxR - z1 * sxR, z2 = y * sxR + z1 * cxR;
+        return [x1 + px, y1 + py, z2 + pz];
+      };
+      gl.disable(gl.BLEND);
+      gl.enable(gl.CULL_FACE);
+      gl.uniform1f(this.u.uAlphaTest, 0.5);
+      this._drawDynamic(cubeVerts(hand.tex, xf, hand.light), gl.TRIANGLES);
     }
 
     resize() {
@@ -158,7 +254,7 @@ void main() {
     }
 
     // cam: {x,y,z,yaw,pitch}, R — дальность прорисовки в чанках
-    render(world, cam, R, underwater) {
+    render(world, cam, R, underwater, extras) {
       const gl = this.gl;
       this.resize();
       gl.viewport(0, 0, this.canvas.width, this.canvas.height);
@@ -224,6 +320,25 @@ void main() {
       }
       gl.depthMask(true);
       gl.disable(gl.BLEND);
+
+      if (extras) {
+        this._drawOverlays(extras);
+        if (extras.hand) this._drawHand(extras.hand);
+      }
+    }
+
+    // Луч из камеры через точку экрана (в CSS-пикселях)
+    screenRay(cam, sx, sy) {
+      const cp = Math.cos(cam.pitch);
+      const f = [-Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp];
+      const r = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
+      const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+      const w = window.innerWidth, h = window.innerHeight;
+      const t = Math.tan(35 * Math.PI / 180);
+      const nx = (sx / w * 2 - 1) * t * (w / h), ny = (1 - sy / h * 2) * t;
+      const d = [f[0] + r[0] * nx + u[0] * ny, f[1] + r[1] * nx + u[1] * ny, f[2] + r[2] * nx + u[2] * ny];
+      const l = Math.hypot(d[0], d[1], d[2]);
+      return [d[0] / l, d[1] / l, d[2] / l];
     }
   }
 

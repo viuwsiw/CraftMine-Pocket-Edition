@@ -16,6 +16,25 @@
       this.inWater = false;
       this.headInWater = false;
       this.bob = 0;
+      this.health = 20;       // 10 сердец
+      this.fallTop = null;    // высота, с которой начался полёт вниз
+      this.regen = 0;
+      this.onHurt = null;
+    }
+
+    hurt(amount) {
+      if (amount <= 0 || this.health <= 0) return;
+      this.health = Math.max(0, this.health - amount);
+      this.regen = 0;
+      if (this.onHurt) this.onHurt(amount);
+    }
+
+    // Пересекается ли игрок с блоком (для запрета установки блока в себя)
+    intersectsBlock(bx, by, bz) {
+      const p = this.pos;
+      return bx + 1 > p[0] - HALF_W && bx < p[0] + HALF_W &&
+        by + 1 > p[1] && by < p[1] + HEIGHT &&
+        bz + 1 > p[2] - HALF_W && bz < p[2] + HALF_W;
     }
 
     get eye() { return [this.pos[0], this.pos[1] + EYE, this.pos[2]]; }
@@ -119,6 +138,21 @@
         }
       }
       if (this.inWater && hitH && len > 0.1) v[1] = Math.max(v[1], 3);
+
+      // Урон от падения: больше 3 блоков — по полсердца за блок
+      if (this.inWater) this.fallTop = null;
+      else if (!this.onGround) {
+        if (this.fallTop === null || p[1] > this.fallTop) this.fallTop = p[1];
+      } else if (this.fallTop !== null) {
+        const dist = this.fallTop - p[1];
+        this.fallTop = null;
+        if (dist > 3.5) this.hurt(Math.floor(dist - 3));
+      }
+      // Восстановление здоровья
+      if (this.health > 0 && this.health < 20) {
+        this.regen += dt;
+        if (this.regen > 3) { this.regen = 0; this.health++; }
+      }
 
       // Покачивание камеры при ходьбе
       const hs = Math.hypot(v[0], v[2]);
