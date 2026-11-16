@@ -16,6 +16,7 @@
   };
 
   const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  const isApp = /CraftMinePE/.test(navigator.userAgent); // запущено внутри Android-приложения
   const settings = Object.assign({
     renderDistance: isTouch ? 4 : 6,
     sensitivity: 100,
@@ -304,7 +305,7 @@
   }
 
   function goFullscreen() {
-    if (!isTouch) return;
+    if (!isTouch || isApp) return;
     const el = document.documentElement;
     const req = el.requestFullscreen || el.webkitRequestFullscreen;
     if (req && !document.fullscreenElement) {
@@ -490,6 +491,23 @@
     };
     renderer.render(world, cam, R, player.headInWater, extras);
   }
+
+  // Кнопка «Назад» в Android: true — обработано, false — выйти из приложения
+  window.CMBack = function () {
+    const visible = (id) => !$(id).classList.contains('hidden');
+    if (state === 'game') { pause(); return true; }
+    if (state === 'paused') {
+      if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
+      resume(); return true;
+    }
+    if (state === 'dead' || state === 'loading') return true;
+    if (visible('screen-create')) { show('screen-worlds'); return true; }
+    if (visible('screen-worlds')) { show('screen-menu'); return true; }
+    if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
+    return false;
+  };
+  // Приложение свернули — ставим паузу и сохраняемся
+  window.CMPause = function () { pause(); savePlayer(); };
 
   window.addEventListener('resize', () => renderer.resize());
   document.addEventListener('contextmenu', (e) => e.preventDefault());
