@@ -1,5 +1,5 @@
 'use strict';
-// CraftMine PE — процедурные текстуры 16x16 (атлас 256x256)
+// CraftMine PE — процедурные текстуры 32x32 (атлас 512x512)
 (function (CM) {
   const NAMES = ['grass_top', 'grass_side', 'dirt', 'stone', 'sand', 'water',
     'log_side', 'log_top', 'leaves', 'bedrock', 'gravel', 'planks', 'cobblestone',
@@ -8,7 +8,10 @@
   const TILES = {};
   NAMES.forEach((n, i) => { TILES[n] = i; });
 
-  const TILE = 16, PER_ROW = 16, ATLAS = TILE * PER_ROW;
+  // Тайл 32x32. Старые рисовальщики работают в сетке 16x16 (каждая клетка — 2x2 пикселя, шум — по пикселям),
+  // новые (hd) рисуют сразу все 32x32 пикселя.
+  const TILE = 32, K = TILE / 16, PER_ROW = 16, ATLAS = TILE * PER_ROW;
+  let curX = 0, curY = 0;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = ATLAS;
   const ctx = canvas.getContext('2d');
@@ -33,13 +36,14 @@
     };
   }
 
-  function paint(name, fn) {
+  function paint(name, fn, hd) {
     if (!(name in TILES)) TILES[name] = Object.keys(TILES).length; // новые тайлы добавляются в конец атласа
     const i = TILES[name];
     const img = ctx.createImageData(TILE, TILE);
     for (let y = 0; y < TILE; y++) {
       for (let x = 0; x < TILE; x++) {
-        const c = fn(x, y);
+        curX = x; curY = y;
+        const c = hd ? fn(x, y) : fn(Math.floor(x / K), Math.floor(y / K));
         const o = (y * TILE + x) * 4;
         img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2];
         img.data[o + 3] = c[3] === undefined ? 255 : c[3];
@@ -310,12 +314,13 @@
   function pixelOf(name) {
     const i = TILES[name];
     const d = ctx.getImageData((i % PER_ROW) * TILE, Math.floor(i / PER_ROW) * TILE, TILE, TILE).data;
-    return (x, y) => { const o = (y * TILE + x) * 4; return [d[o], d[o + 1], d[o + 2], d[o + 3]]; };
+    // Координаты в сетке 16x16; внутри клетки берётся тот же подпиксель, что рисуется сейчас
+    return (x, y) => { const o = ((y * K + (curY % K)) * TILE + x * K + (curX % K)) * 4; return [d[o], d[o + 1], d[o + 2], d[o + 3]]; };
   }
   // Тайл по маске символов (строки 16x16) и палитре {символ: [r,g,b,a]}
   function paintMask(name, rows, palette) {
     paint(name, (x, y) => palette[rows[y][x]] || [0, 0, 0, 0]);
   }
 
-  CM.Textures = { atlas: canvas, tile: TILE, perRow: PER_ROW, tileURL, blockIcon, pixelIcon, paint, paintMask, pixelOf, rand, mul, vary };
+  CM.Textures = { atlas: canvas, ctx, tile: TILE, grid: 16, perRow: PER_ROW, tileURL, blockIcon, pixelIcon, paint, paintMask, pixelOf, rand, mul, vary };
 })(window.CM);

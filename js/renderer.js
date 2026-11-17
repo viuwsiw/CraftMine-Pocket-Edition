@@ -130,7 +130,60 @@ void main() {
       for (const k of [0, 1, 2, 0, 2, 3]) for (let e = 0; e < 6; e++) out.push(vs[k][e]);
     });
   }
-  CM.Geo = { shapeVerts, partVerts, tileUV };
+  // Объёмный предмет из плоской картинки: передняя и задняя грани + боковые стенки
+  // у каждого непрозрачного пикселя (сетка 16x16), толщина 1/16. Кэш по номеру тайла.
+  const spriteCache = new Map();
+  function spriteLocal(tile) {
+    if (spriteCache.has(tile)) return spriteCache.get(tile);
+    const TS = CM.Textures.tile, per = CM.Textures.perRow, G = CM.Textures.grid, K = TS / G;
+    const d = CM.Textures.ctx.getImageData((tile % per) * TS, Math.floor(tile / per) * TS, TS, TS).data;
+    const solid = (i, j) => i >= 0 && j >= 0 && i < G && j < G && d[((j * K) * TS + i * K) * 4 + 3] > 128;
+    const [u0, v0, st] = tileUV(tile);
+    const h = 1 / 32, z0 = 0.5 - h, z1 = 0.5 + h;
+    const out = [];
+    const quad = (p, uv, shade) => {
+      for (const k of [0, 1, 2, 0, 2, 3]) out.push(p[k][0], p[k][1], p[k][2], uv[k][0], uv[k][1], shade);
+    };
+    const U = (x) => u0 + x * st, V = (y) => v0 + (1 - y) * st;
+    quad([[0, 0, z1], [1, 0, z1], [1, 1, z1], [0, 1, z1]], [[U(0), V(0)], [U(1), V(0)], [U(1), V(1)], [U(0), V(1)]], 1);
+    quad([[1, 0, z0], [0, 0, z0], [0, 1, z0], [1, 1, z0]], [[U(1), V(0)], [U(0), V(0)], [U(0), V(1)], [U(1), V(1)]], 0.8);
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+      if (!solid(i, j)) continue;
+      const x0 = i / G, x1 = (i + 1) / G, y0 = 1 - (j + 1) / G, y1 = 1 - j / G;
+      const c = [u0 + (i + 0.5) / G * st, v0 + (j + 0.5) / G * st], uv = [c, c, c, c];
+      if (!solid(i - 1, j)) quad([[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], uv, 0.72);
+      if (!solid(i + 1, j)) quad([[x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1]], uv, 0.72);
+      if (!solid(i, j - 1)) quad([[x0, y1, z1], [x1, y1, z1], [x1, y1, z0], [x0, y1, z0]], uv, 0.95);
+      if (!solid(i, j + 1)) quad([[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]], uv, 0.55);
+    }
+    const arr = new Float32Array(out);
+    spriteCache.set(tile, arr);
+    return arr;
+  }
+  function spriteVerts(tile, xf, light) {
+    const L = spriteLocal(tile), out = new Float32Array(L.length);
+    for (let o = 0; o < L.length; o += 6) {
+      const q = xf([L[o], L[o + 1], L[o + 2]]);
+      out[o] = q[0]; out[o + 1] = q[1]; out[o + 2] = q[2];
+      out[o + 3] = L[o + 3]; out[o + 4] = L[o + 4]; out[o + 5] = L[o + 5] * light;
+    }
+    return out;
+  }
+
+  // Поворот точки последовательностью [[ось, угол], ...]
+  function rotate(p, seq) {
+    let [x, y, z] = p;
+    for (const [ax, a] of seq) {
+      if (!a) continue;
+      const c = Math.cos(a), s = Math.sin(a);
+      if (ax === 'x') { const ny = y * c - z * s; z = y * s + z * c; y = ny; }
+      else if (ax === 'y') { const nx = x * c + z * s; z = -x * s + z * c; x = nx; }
+      else { const nx = x * c - y * s; y = x * s + y * c; x = nx; }
+    }
+    return [x, y, z];
+  }
+
+  CM.Geo = { shapeVerts, partVerts, tileUV, spriteVerts, rotate };
 
   class Renderer {
     constructor(canvas, iconMode) {
@@ -240,31 +293,40 @@ void main() {
       gl.uniform3f(this.u.uOffset, 0, 0, 0);
       gl.uniform1f(this.u.uFogNear, 100);
       gl.uniform1f(this.u.uFogFar, 200);
-      const sw = Math.sin(hand.swing * Math.PI);
-      // Три вида: пустая рука (arm), плоский предмет (sprite), блок (boxes + tex)
+      const sw = Math.sin(hand.swing * Math.PI), sw2 = Math.sin(Math.sqrt(hand.swing) * Math.PI);
+      // Три вида: пустая рука (arm), объёмный предмет (sprite), блок (boxes + tex)
       const arm = !!hand.arm, sprite = hand.sprite !== undefined && hand.sprite !== null;
-      let scale, pre, ry, rx, px, py, pz;
-      if (arm) { scale = [0.36, 1.25, 0.36]; pre = 2.05; ry = 0.42; rx = -0.1; px = 0.74; py = -0.66; pz = -0.98; }
-      else if (sprite) { scale = [0.95, 0.95, 0.95]; pre = 0; ry = 2.05; rx = -0.2; px = 0.62; py = -0.3; pz = -1.05; }
-      else { scale = [0.62, 0.62, 0.62]; pre = 0; ry = 0.78; rx = 0.16; px = 0.66; py = -0.6; pz = -1.05; }
-      ry -= sw * 0.45; rx += sw * 0.7; px += hand.bobX - sw * 0.25; py += hand.bobY - sw * 0.12; pz -= sw * 0.2;
-      const cp = Math.cos(pre), sp = Math.sin(pre);
-      const cyR = Math.cos(ry), syR = Math.sin(ry), cxR = Math.cos(rx), sxR = Math.sin(rx);
+      let scale, rot, pos;
+      if (arm) {
+        // рука идёт из правого нижнего угла вверх и чуть внутрь, видна кисть и бок рукава
+        scale = [0.32, 1.1, 0.32];
+        rot = [['x', 2.3 - sw2 * 0.6], ['z', 0.5 + sw * 0.25], ['y', 0.5 - sw * 0.45]];
+        pos = [0.6 - sw * 0.2, -0.6 + sw2 * 0.1, -0.85 - sw * 0.12];
+      } else if (sprite) {
+        // инструмент: рукоять у правого нижнего угла, рабочая часть смотрит вверх и вперёд
+        scale = [0.85, 0.85, 0.85];
+        rot = [['z', -0.2], ['y', 2.3 - sw * 0.5], ['x', -0.05 + sw2 * 0.9]];
+        pos = [0.6 - sw * 0.22, -0.4 - sw * 0.18, -0.95 - sw * 0.15];
+      } else {
+        scale = [0.62, 0.62, 0.62];
+        rot = [['y', 0.78 - sw * 0.45], ['x', 0.16 + sw * 0.7]];
+        pos = [0.66 - sw * 0.25, -0.6 - sw * 0.12, -1.05 - sw * 0.2];
+      }
+      const tune = CM.handTune && CM.handTune[arm ? 'arm' : sprite ? 'sprite' : 'block']; // для подбора углов
+      if (tune) { scale = tune.scale || scale; rot = tune.rot || rot; pos = (tune.pos || pos).slice(); }
+      pos[0] += hand.bobX; pos[1] += hand.bobY;
       const xf = (p) => {
-        let x = (p[0] - 0.5) * scale[0], y = (p[1] - 0.5) * scale[1], z = (p[2] - 0.5) * scale[2];
-        const y0 = y * cp - z * sp, z0 = y * sp + z * cp; y = y0; z = z0;
-        const x1 = x * cyR + z * syR, z1 = -x * syR + z * cyR;
-        const y1 = y * cxR - z1 * sxR, z2 = y * sxR + z1 * cxR;
-        return [x1 + px, y1 + py, z2 + pz];
+        const q = rotate([(p[0] - 0.5) * scale[0], (p[1] - 0.5) * scale[1], (p[2] - 0.5) * scale[2]], rot);
+        return [q[0] + pos[0], q[1] + pos[1], q[2] + pos[2]];
       };
-      let boxes, tex, light = hand.light;
-      if (arm) { boxes = [[0, 0, 0, 1, 1, 1]]; const a = CM.TILES.pl_arm; tex = [a, a, CM.TILES.pl_body, CM.TILES.skin, a, a]; }
-      else if (sprite) { boxes = [[0, 0, 0.5, 1, 1, 0.5]]; tex = [hand.sprite, hand.sprite, hand.sprite]; light /= 0.65; }
-      else { boxes = hand.boxes; tex = hand.tex; }
       gl.disable(gl.BLEND);
       gl.disable(gl.CULL_FACE);
       gl.uniform1f(this.u.uAlphaTest, 0.5);
-      this._drawDynamic(shapeVerts(boxes, tex, xf, light), gl.TRIANGLES);
+      let verts;
+      if (arm) { const a = CM.TILES.pl_arm; verts = shapeVerts([[0, 0, 0, 1, 1, 1]], [a, a, CM.TILES.pl_body, CM.TILES.skin, a, a], xf, hand.light); }
+      else if (sprite) verts = spriteVerts(hand.sprite, xf, hand.light);
+      else verts = shapeVerts(hand.boxes, hand.tex, xf, hand.light);
+      this._drawDynamic(verts, gl.TRIANGLES);
     }
 
     // Солнце и луна: квадраты на небе, движутся по кругу с востока на запад

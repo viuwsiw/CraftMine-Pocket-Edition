@@ -270,7 +270,7 @@
         };
         let v;
         if (block) { const sh = CM.Items.itemShape(it.id); v = Geo.shapeVerts(sh.boxes, sh.tex, xf, 1); }
-        else { const t = CM.Items.sprite(it.id); v = Geo.shapeVerts([[0, 0, 0.5, 1, 1, 0.5]], [t, t, t], xf, 1 / 0.65); }
+        else v = Geo.spriteVerts(CM.Items.sprite(it.id), xf, 1);
         for (let k = 0; k < v.length; k++) normal.push(v[k]);
       }
       return { normal, hurt };
