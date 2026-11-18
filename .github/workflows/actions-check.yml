@@ -1,9 +1,0 @@
-# Временная проверка: работают ли вообще GitHub Actions в этом аккаунте (Linux-машина)
-name: Actions check
-on:
-  workflow_dispatch:
-jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Actions OK"

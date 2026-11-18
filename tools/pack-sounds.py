@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CraftMine PE: embed sounds/*.ogg into js/sound_pack.js (data URLs, grouped by event name).
+"""CraftMine PE: embed sounds/*.mp3 (or .ogg) into js/sound_pack.js (data URLs, grouped by event name).
 
 File name = <event>_<n>.ogg, e.g. step_stone_3.ogg -> event 'step_stone'. Several files per event are variants
 picked at random. Events without files fall back to the sounds synthesised in js/sound.js.
@@ -15,11 +15,11 @@ SRC = os.path.join(ROOT, 'sounds')
 OUT = os.path.join(ROOT, 'js', 'sound_pack.js')
 pack = {}
 for name in sorted(os.listdir(SRC)) if os.path.isdir(SRC) else []:
-    m = re.match(r'^(.+?)_(\d+)\.ogg$', name)
+    m = re.match(r'^(.+?)_(\d+)\.(mp3|ogg)$', name)
     if not m:
         continue
     with open(os.path.join(SRC, name), 'rb') as f:
-        pack.setdefault(m.group(1), []).append('data:audio/ogg;base64,' + base64.b64encode(f.read()).decode('ascii'))
+        pack.setdefault(m.group(1), []).append(('data:audio/mpeg;base64,' if name.endswith('.mp3') else 'data:audio/ogg;base64,') + base64.b64encode(f.read()).decode('ascii'))
 with open(OUT, 'w', encoding='utf-8') as f:
     f.write('// Сгенерировано tools/pack-sounds.py из папки sounds/. Не редактировать вручную.\n')
     f.write('window.CM = window.CM || {};\n')

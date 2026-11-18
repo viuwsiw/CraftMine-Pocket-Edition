@@ -3,7 +3,7 @@
 
 Usage: python3 tools/import-sounds.py <folder with the unpacked packs>
 Each sound is trimmed (leading silence, max length), made mono 22 kHz, loudness-normalised and saved as
-sounds/<event>_<n>.ogg. The game embeds sounds/ into js/sound_pack.js (tools/pack-sounds.py, run by android/build.sh).
+sounds/<event>_<n>.mp3. The game embeds sounds/ into js/sound_pack.js (tools/pack-sounds.py, run by android/build.sh).
 All source packs are CC0 (public domain) from OpenGameArt.org; see sounds/README.md for the list.
 """
 import os
@@ -53,7 +53,7 @@ MAP = {
 
 os.makedirs(OUT, exist_ok=True)
 for f in os.listdir(OUT):
-    if f.endswith('.ogg'):
+    if f.endswith(('.ogg', '.mp3')):
         os.remove(os.path.join(OUT, f))
 total = 0
 for event, items in MAP.items():
@@ -62,12 +62,12 @@ for event, items in MAP.items():
         if not os.path.exists(src):
             print('missing', rel, file=sys.stderr)
             continue
-        dst = os.path.join(OUT, f'{event}_{i}.ogg')
+        dst = os.path.join(OUT, f'{event}_{i}.mp3')  # MP3 понимают и Android, и iOS
         af = 'aresample=22050,silenceremove=start_periods=1:start_threshold=-40dB'
         if extra:
             af += ',' + extra
         af += f',atrim=0:{dur},afade=t=out:st={max(0, dur - 0.06):.2f}:d=0.06,loudnorm=I=-16:TP=-1.5'
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', src, '-ac', '1', '-af', af, '-ar', '22050',
-                        '-c:a', 'libvorbis', '-q:a', '1', dst], check=True)
+                        '-c:a', 'libmp3lame', '-b:a', '40k', dst], check=True)
         total += os.path.getsize(dst)
 print(f'sounds/: {sum(len(v) for v in MAP.values())} files, {total // 1024} KB')
