@@ -1,8 +1,8 @@
 'use strict';
-// CraftMine PE v0.0.2 alpha — экраны, игровой цикл
+// CraftMine PE v0.0.3 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.0.2 alpha';
-  const PLAYER_NAME = 'Nikita';
+  const VERSION = '0.0.3 alpha';
+  const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
   // ---------- Хранилище ----------
@@ -23,7 +23,19 @@
     autoJump: true,
     fallDamage: true,
     showCoords: false,
+    nickname: DEFAULT_NICK,
   }, store.get('settings', {}));
+
+  // ---------- Никнейм ----------
+  // Убираем управляющие символы и лишние пробелы; пустое имя — стандартное
+  function cleanNick(v) {
+    const s = String(v || '').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 16);
+    return s || DEFAULT_NICK;
+  }
+  settings.nickname = cleanNick(settings.nickname);
+  const nick = () => settings.nickname;
+  function showNick() { for (const el of document.querySelectorAll('.nick')) el.textContent = nick(); }
+  showNick();
 
   // ---------- Текстуры в интерфейсе ----------
   document.documentElement.style.setProperty('--stone-tex', `url(${CM.Textures.tileURL('stone', 4)})`);
@@ -196,7 +208,7 @@
     { name: 'Инструменты', icon: () => iconOf(Items.toolId(1, 0)), test: (r) => !!Items.tool(r.out[0]) },
   ];
   const SECTIONS = {
-    inv: { name: 'Инвентарь', icon: () => FACE_ICON },
+    inv: { get name() { return 'Инвентарь: ' + nick(); }, icon: () => FACE_ICON },
     catalog: { name: 'Все предметы', icon: () => iconOf(Bk.GRASS) },
     craft: { name: 'Крафт', icon: () => iconOf(Bk.CRAFTING) },
     table: { name: 'Верстак', icon: () => iconOf(Bk.CRAFTING) },
@@ -539,6 +551,7 @@
 
   // Настройки
   function syncSettingsUI() {
+    $('set-nick').value = nick();
     $('set-rd').value = settings.renderDistance;
     $('val-rd').textContent = settings.renderDistance;
     $('set-sens').value = settings.sensitivity;
@@ -553,6 +566,15 @@
   $('set-autojump').addEventListener('change', (e) => { settings.autoJump = e.target.checked; });
   $('set-falldmg').addEventListener('change', (e) => { settings.fallDamage = e.target.checked; });
   $('set-coords').addEventListener('change', (e) => { settings.showCoords = e.target.checked; });
+  const applyNick = () => {
+    settings.nickname = cleanNick($('set-nick').value);
+    store.set('settings', settings);
+    showNick();
+    if (player) player.name = nick();
+  };
+  $('set-nick').addEventListener('change', applyNick);
+  $('set-nick').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('set-nick').blur(); } });
+  tap('btn-nick', () => { settingsReturn = 'menu'; openSettings(); setTimeout(() => $('set-nick').focus(), 50); });
   tap('btn-textures', () => {
     if (!texUI) texUI = CM.TexPack.buildUI($('tex-root'), refreshTextures, toast);
     else texUI.refreshAll();
@@ -566,6 +588,7 @@
     if (texUI) texUI.refreshAll();
   });
   tap('btn-settings-done', () => {
+    applyNick();
     store.set('settings', settings);
     $('debug').classList.toggle('hidden', !settings.showCoords);
     show(settingsReturn === 'pause' ? 'screen-pause' : 'screen-menu');
@@ -577,7 +600,7 @@
     state = 'paused';
     controls.reset();
     savePlayer();
-    $('pause-info').innerHTML = `Мир: ${escapeHtml(current.name)}<br>Режим: ${creative ? 'Творческий' : 'Выживание'}<br>Игрок: ${PLAYER_NAME}`;
+    $('pause-info').innerHTML = `Мир: ${escapeHtml(current.name)}<br>Режим: ${creative ? 'Творческий' : 'Выживание'}<br>Игрок: ${escapeHtml(nick())}`;
     show('screen-pause');
   }
   function resume() {
@@ -652,7 +675,7 @@
     time = typeof rec.time === 'number' ? rec.time : 0.05;
     thirdPerson = false;
     $('sleep').classList.remove('on');
-    player = new CM.Player(PLAYER_NAME);
+    player = new CM.Player(nick());
     player.onHurt = () => {
       const h = $('hurt');
       h.classList.add('on');
@@ -972,7 +995,7 @@
       if (settings.showCoords) {
         const p = player.pos, h = ((creative ? 0.2 : time) * 24 + 6) % 24;
         $('debug').textContent =
-          `CraftMine PE ${VERSION}\n${PLAYER_NAME}  ${fps} FPS\nXYZ: ${p[0].toFixed(1)} / ${p[1].toFixed(1)} / ${p[2].toFixed(1)}\n` +
+          `CraftMine PE ${VERSION}\n${nick()}  ${fps} FPS\nXYZ: ${p[0].toFixed(1)} / ${p[1].toFixed(1)} / ${p[2].toFixed(1)}\n` +
           `Время: ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor(h % 1 * 60)).padStart(2, '0')}  Животных: ${ents.mobs.length}`;
       }
     }

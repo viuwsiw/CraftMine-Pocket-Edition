@@ -40,7 +40,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.0.2");
+        s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.0.3");
         // Выбор PNG-файла для своих текстур
         web.setWebChromeClient(new WebChromeClient() {
             @Override

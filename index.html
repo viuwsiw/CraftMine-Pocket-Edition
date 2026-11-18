@@ -18,14 +18,14 @@
     <div class="logo-wrap">
       <h1 class="logo">CraftMine</h1>
       <div class="subtitle">Pocket Edition</div>
-      <div class="version-top">v0.0.2 alpha</div>
+      <div class="version-top">v0.0.3 alpha</div>
     </div>
     <div class="tiles">
       <button class="tile locked" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""><span class="tile-badge">скоро</span></button>
       <button class="tile" id="btn-play"><span class="tile-label">Играть</span><img class="tile-icon" id="icon-play" alt=""></button>
       <button class="tile" id="btn-settings"><span class="tile-label">Настройки</span><img class="tile-icon" id="icon-settings" alt=""></button>
     </div>
-    <div class="player-tag">Игрок: <span>Nikita</span></div>
+    <button class="player-tag" id="btn-nick">Игрок: <span class="nick">Nikita</span> ✎</button>
   </section>
 
   <!-- Список миров -->
@@ -65,7 +65,7 @@
           <button class="btn small" data-type="flat">Плоский</button>
         </div>
       </div>
-      <div class="hint">Игровой персонаж: Nikita</div>
+      <div class="hint">Игровой персонаж: <span class="nick">Nikita</span></div>
     </div>
     <div class="row-buttons">
       <button class="btn" id="btn-create-back">Назад</button>
@@ -77,6 +77,10 @@
   <section id="screen-settings" class="screen dirt-bg hidden">
     <div class="panel-title">Настройки</div>
     <div class="form">
+      <label class="field">
+        <span>Никнейм (до 16 символов)</span>
+        <input id="set-nick" type="text" maxlength="16" autocomplete="off" spellcheck="false">
+      </label>
       <label class="field">
         <span>Дальность прорисовки: <b id="val-rd"></b> чанк.</span>
         <input id="set-rd" type="range" min="2" max="8" step="1">

@@ -142,6 +142,8 @@ html, body {
   text-shadow: 1px 1px 0 #000;
 }
 .player-tag span { color: var(--accent); }
+button.player-tag { font-family: var(--font); background: rgba(0,0,0,0.35); border: 2px solid rgba(0,0,0,0.5); padding: 6px 8px; cursor: pointer; }
+button.player-tag:active { background: rgba(0,0,0,0.6); }
 
 /* ---- Панели и формы ---- */
 .panel-title {
