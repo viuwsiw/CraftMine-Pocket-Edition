@@ -27,6 +27,19 @@
   item(I.ARROW, 'Стрела', 'arrow');
   item(I.FLINT, 'Кремень', 'flint');
   item(I.FEATHER, 'Перо', 'feather');
+  item(I.LEATHER, 'Кожа', 'leather');
+  // Броня: очки защиты (как в Minecraft) и прочность по частям
+  const ARMOR_MATS = [
+    { key: 'leather', m: 'Кожаный', p: 'Кожаные', pts: [1, 3, 2, 1], dur: [55, 80, 75, 65], src: I.LEATHER },
+    { key: 'iron', m: 'Железный', p: 'Железные', pts: [2, 6, 5, 2], dur: [165, 240, 225, 195], src: I.IRON_INGOT },
+    { key: 'gold', m: 'Золотой', p: 'Золотые', pts: [2, 5, 3, 1], dur: [77, 112, 105, 91], src: I.GOLD_INGOT },
+    { key: 'diamond', m: 'Алмазный', p: 'Алмазные', pts: [3, 8, 6, 3], dur: [363, 528, 495, 429], src: I.DIAMOND },
+  ];
+  const PIECES = [['helmet', 'шлем', false, 5], ['chestplate', 'нагрудник', false, 8], ['leggings', 'поножи', true, 7], ['boots', 'ботинки', true, 4]];
+  const armorId = (mat, piece) => I.ARMOR + mat * 4 + piece;
+  ARMOR_MATS.forEach((m, mi) => PIECES.forEach(([k, n, plural], pi) => {
+    item(armorId(mi, pi), `${plural ? m.p : m.m} ${n}`, `${m.key}_${k}`, { stack: 1, armor: { piece: pi, pts: m.pts[pi], dur: m.dur[pi], mat: m.key } });
+  }));
   // Лук: тап — выстрел стрелой; огниво: поджигает; ножницы: стригут овец и быстро режут листву и шерсть
   item(I.BOW, 'Лук', 'bow', { stack: 1, fuel: 15, tool: { type: 'bow', tier: 0, speed: 1, dur: 384, dmg: 1 } });
   item(I.FLINT_STEEL, 'Огниво', 'flint_and_steel', { stack: 1, tool: { type: 'flint', tier: 0, speed: 1, dur: 64, dmg: 1 } });
@@ -106,6 +119,7 @@
     { out: [I.SHEARS, 1], in: [[I.IRON_INGOT, 2]], table: true },
     { out: [B.TNT, 1], in: [[I.GUNPOWDER, 5], [B.SAND, 4]], table: true },
     { out: [B.WOOL, 1], in: [[I.STRING, 4]] },
+    ...ARMOR_MATS.flatMap((m, mi) => PIECES.map((p, pi) => ({ out: [armorId(mi, pi), 1], in: [[m.src, p[3]]], table: true }))),
   );
 
   // ---------- Свойства ----------
@@ -115,6 +129,7 @@
   const maxStack = (id) => (isBlock(id) ? MAX_STACK : ITEMS[id].stack);
   const tool = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].tool || null : null);
   const food = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].food || 0 : 0);
+  const armor = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].armor || null : null);
   const egg = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].egg || null : null);
   const fuel = (id) => (isBlock(id) ? BLOCK_FUEL[id] || 0 : (ITEMS[id] && ITEMS[id].fuel) || 0);
   // Плоская картинка предмета (растения, факел, лестница тоже показываются картинкой); null — объёмный блок
@@ -219,12 +234,17 @@
 
   // ---------- Инвентарь: 36 ячеек, 0–8 — панель быстрого доступа ----------
   class Inventory {
-    constructor(slots) {
+    constructor(slots, armorSlots) {
       this.slots = new Array(36).fill(null);
+      this.armor = [null, null, null, null]; // шлем, нагрудник, поножи, ботинки
+      if (armorSlots) armorSlots.forEach((s, i) => { if (s && i < 4 && armor(s[0]) && armor(s[0]).piece === i) this.armor[i] = { id: s[0], count: 1, dur: s[2] }; });
       if (slots) slots.forEach((s, i) => {
         if (s && i < 36 && def(s[0])) this.slots[i] = { id: s[0], count: s[1], dur: s[2] };
       });
     }
+
+    armorJSON() { return this.armor.map((s) => (s ? [s.id, 1, s.dur] : 0)); }
+    armorPoints() { let n = 0; for (const s of this.armor) if (s) n += armor(s.id).pts; return n; }
 
     toJSON() { return this.slots.map((s) => (s ? (s.dur === undefined ? [s.id, s.count] : [s.id, s.count, s.dur]) : 0)); }
 
@@ -272,6 +292,6 @@
     }
   }
 
-  CM.Items = { CATALOG, EXTRA, MAX_STACK, RECIPES, SMELT, SMELT_TIME, ITEMS, isBlock, name, maxStack, tool, food, fuel, sprite, egg,
+  CM.Items = { CATALOG, EXTRA, MAX_STACK, RECIPES, SMELT, SMELT_TIME, ITEMS, isBlock, name, maxStack, tool, food, fuel, sprite, egg, armor, armorId,
     itemShape, mining, icon, buildIcons, moveSlot, toolId, Inventory };
 })(window.CM);

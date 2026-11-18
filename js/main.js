@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 7';
+  const VERSION = '0.1.0 alpha build 8';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -157,7 +157,7 @@
     const id = it ? String(it.id) : '';
     if (img.dataset.id !== id) { img.dataset.id = id; if (it) img.src = Items.icon(it.id); else img.removeAttribute('src'); }
     el.querySelector('.cnt').textContent = it && showCount && it.count > 1 ? it.count : '';
-    const dur = el.querySelector('.dur'), t = it && Items.tool(it.id);
+    const dur = el.querySelector('.dur'), t = it && (Items.tool(it.id) || Items.armor(it.id));
     if (t && it.dur !== undefined && it.dur < t.dur) { dur.style.display = 'block'; dur.firstChild.style.width = Math.max(4, it.dur / t.dur * 100) + '%'; }
     else dur.style.display = 'none';
   }
@@ -228,15 +228,18 @@
   const FACE_ICON = CM.Textures.tileURL('pl_face', 3);
   // Категории каталога творческого режима
   const isWool = (id) => id === Bk.WOOL || (id >= Bk.WOOL_C && id < Bk.WOOL_C + Bk.WOOL_COUNT);
+  // Творческий инвентарь — 4 раздела, как в Minecraft PE: строительство, природа, снаряжение, предметы
+  const ALL_ITEMS = [...new Set(Items.CATALOG.concat(Items.EXTRA))];
+  const NATURE = new Set([Bk.GRASS, Bk.DIRT, Bk.SAND, Bk.GRAVEL, Bk.CLAY, Bk.LOG, Bk.BIRCH, Bk.SPRUCE, Bk.LEAVES, Bk.BIRCH_LEAVES, Bk.SPRUCE_LEAVES,
+    Bk.COAL_ORE, Bk.IRON_ORE, Bk.GOLD_ORE, Bk.DIAMOND_ORE, Bk.REDSTONE_ORE, Bk.LAPIS_ORE, Bk.ICE, Bk.SNOW, Bk.FARMLAND,
+    Bk.WATER, Bk.LAVA, Bk.BEDROCK, Bk.INV_BEDROCK, Bk.OBSIDIAN]);
+  const isNature = (id) => Items.isBlock(id) && (NATURE.has(id) || BL[id].plant);
+  const isGear = (id) => !!(Items.tool(id) || Items.armor(id) || id === CM.I.ARROW);
   const CATS = [
-    { name: 'Блоки', icon: () => iconOf(Bk.BRICKS), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && !BL[id].kind && !BL[id].plant && !isWool(id)) },
-    { name: 'Шерсть', icon: () => iconOf(Bk.WOOL_C + 3), ids: Items.CATALOG.filter(isWool) },
-    { name: 'Растения', icon: () => iconOf(Bk.ROSE), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && BL[id].plant) },
-    { name: 'Мебель и детали', icon: () => iconOf(Bk.DOOR), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && BL[id].kind) },
-    { name: 'Инструменты', icon: () => iconOf(Items.toolId(2, 3)), ids: Items.CATALOG.filter((id) => Items.tool(id)) },
-    { name: 'Материалы и еда', icon: () => iconOf(CM.I.BEEF), ids: Items.CATALOG.filter((id) => !Items.isBlock(id) && !Items.tool(id) && !Items.egg(id)) },
-    { name: 'Яйца призыва', icon: () => iconOf(CM.I.EGG + 6), ids: Items.CATALOG.filter((id) => Items.egg(id)) },
-    { name: 'Недобываемые блоки', icon: () => iconOf(Bk.TNT), ids: Items.EXTRA },
+    { name: 'Строительство', icon: () => iconOf(Bk.BRICKS), ids: ALL_ITEMS.filter((id) => Items.isBlock(id) && !isNature(id)) },
+    { name: 'Природа', icon: () => iconOf(Bk.GRASS), ids: ALL_ITEMS.filter(isNature) },
+    { name: 'Снаряжение', icon: () => iconOf(Items.toolId(4, 3)), ids: ALL_ITEMS.filter((id) => !Items.isBlock(id) && isGear(id)) },
+    { name: 'Предметы', icon: () => iconOf(CM.I.BEEF), ids: ALL_ITEMS.filter((id) => !Items.isBlock(id) && !isGear(id)) },
   ];
   const RCATS = [
     { name: 'Блоки и вещи', icon: () => iconOf(Bk.PLANKS), test: (r) => !Items.tool(r.out[0]) },
@@ -271,6 +274,13 @@
     const it = arr[i];
     if (!it) return;
     let left = it.count;
+    if (arr === inv.slots && Items.armor(it.id)) {
+      // броня из сумки — сразу надеть (снятая встаёт на её место)
+      const k = Items.armor(it.id).piece;
+      arr[i] = inv.armor[k]; inv.armor[k] = it;
+      armorChanged();
+      return;
+    }
     if (arr !== inv.slots) left = addInto(inv.slots, 0, 36, it);
     else if (invMode === 'chest' && invTile) left = addInto(invTile.slots, 0, 27, it);
     else if (invMode === 'furnace' && invTile) {
@@ -278,6 +288,7 @@
       else if (Items.fuel(it.id) > 0) left = addInto(invTile.slots, 1, 2, it);
     } else left = i < 9 ? addInto(inv.slots, 9, 36, it) : addInto(inv.slots, 0, 9, it);
     if (left <= 0) arr[i] = null; else it.count = left;
+    if (arr === inv.armor) armorChanged();
   }
 
   function makeSlot(arr, i, kind) {
@@ -295,7 +306,17 @@
       else if (kind === 'hb') selected = i;
     } else if (picked.arr === arr && picked.i === i) { quickMove(arr, i); picked = null; if (kind === 'hb') selected = i; }
     else if (kind === 'out') picked = null;
-    else { Items.moveSlot(picked.arr, picked.i, arr, i); picked = null; if (kind === 'hb') selected = i; }
+    else {
+      // в ячейку брони — только своя часть брони
+      const fits = (a, k, it) => a !== inv.armor || !it || (Items.armor(it.id) && Items.armor(it.id).piece === k);
+      const from = picked.arr[picked.i], to = arr[i];
+      if (fits(arr, i, from) && fits(picked.arr, picked.i, to)) {
+        Items.moveSlot(picked.arr, picked.i, arr, i);
+        if (kind === 'hb') selected = i;
+        if (arr === inv.armor || picked.arr === inv.armor) armorChanged();
+      } else toast('Сюда можно положить только подходящую броню');
+      picked = null;
+    }
     syncInv();
   }
 
@@ -303,7 +324,10 @@
     for (const s of slotEls) {
       paintSlot(s.el, s.arr[s.i], !creative || s.arr !== inv.slots);
       s.el.classList.toggle('picked', !!picked && picked.arr === s.arr && picked.i === s.i);
+      if (s.kind === 'armor') s.el.classList.toggle('empty-armor', !s.arr[s.i]);
     }
+    const al = document.querySelector('.armor-label');
+    if (al) al.textContent = `Броня: ${inv.armorPoints()} / 20`;
     for (const r of recipeEls) {
       const can = inv.canCraft(r.r);
       r.el.classList.toggle('no', !can);
@@ -403,6 +427,15 @@
     } else if (invSection === 'chest') {
       for (let i = 0; i < 27; i++) grid.appendChild(makeSlot(invTile.slots, i, 'chest'));
     } else if (invSection === 'inv') {
+      // броня: 4 ячейки над сумкой
+      const row = document.createElement('div');
+      row.className = 'armor-row';
+      const lab = document.createElement('span');
+      lab.className = 'armor-label';
+      lab.textContent = `Броня: ${inv.armorPoints()} / 20`;
+      row.appendChild(lab);
+      for (let k = 0; k < 4; k++) { const el = makeSlot(inv.armor, k, 'armor'); el.dataset.piece = k; el.style.setProperty('--ghost', `url(${iconOf(Items.armorId(1, k))})`); row.appendChild(el); }
+      content.appendChild(row);
       for (let i = 9; i < 36; i++) grid.appendChild(makeSlot(inv.slots, i, 'inv'));
     }
     if (invSection === 'furnace') {
@@ -462,6 +495,23 @@
   const foodEmpty = P(SHANK, { '#': '#2a1406', a: '#3a2a1e', b: '#3a2a1e', c: '#3a2a1e', d: '#4a4038' }, 2);
   const foodHalf = P(SHANK.map((r) => r.slice(0, 4).replace(/[abcd]/g, 'e') + r.slice(4)), { '#': '#2a1406', a: '#f0b878', b: '#c8742e', c: '#8a4a1a', d: '#f4f0e4', e: '#3a2a1e' }, 2);
   for (let i = 0; i < 10; i++) $('hunger').appendChild(document.createElement('i'));
+  // Шкала брони над сердцами: 10 нагрудников, 20 очков (как здоровье)
+  const CHEST = ['##.....##', '#ab###bb#', '#abbbbbb#', '.#abbbb#.', '.#abbbb#.', '.#abbbb#.', '.#abbbb#.', '.#bbbbb#.', '..#####..'];
+  const armFull = P(CHEST, { '#': '#1a1a1a', a: '#f4f4f4', b: '#b8b8c0' }, 2);
+  const armEmpty = P(CHEST, { '#': '#1a1a1a', a: '#3a3a3e', b: '#3a3a3e' }, 2);
+  const armHalf = P(CHEST.map((r) => r.slice(0, 5) + r.slice(5).replace(/[ab]/g, 'c')), { '#': '#1a1a1a', a: '#f4f4f4', b: '#b8b8c0', c: '#3a3a3e' }, 2);
+  for (let i = 0; i < 10; i++) $('armor').appendChild(document.createElement('i'));
+  let shownArmor = -1;
+  function renderArmor() {
+    const a = inv ? inv.armorPoints() : 0;
+    if (a === shownArmor) return;
+    shownArmor = a;
+    $('armor').style.visibility = a > 0 ? 'visible' : 'hidden';
+    $('armor').querySelectorAll('i').forEach((el, i) => {
+      const v = a - i * 2;
+      el.style.backgroundImage = `url(${v >= 2 ? armFull : v === 1 ? armHalf : armEmpty})`;
+    });
+  }
   let shownFood = -1;
   function renderHunger(f) {
     if (f === shownFood) return;
@@ -781,7 +831,8 @@
     };
     breaking = null;
     creative = (rec.mode || 'creative') === 'creative';
-    inv = rec.inventory ? new Items.Inventory(rec.inventory) : (creative ? Items.Inventory.creativeDefault() : new Items.Inventory());
+    inv = rec.inventory ? new Items.Inventory(rec.inventory, rec.armor) : (creative ? Items.Inventory.creativeDefault() : new Items.Inventory());
+    shownArmor = -1;
     player.invulnerable = creative;
     player.canFly = creative;
     selected = 0;
@@ -825,6 +876,7 @@
     if (!current || !player || player.needsGround || current.temp) return;
     current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: player.flying, food: player.food, sat: player.saturation };
     current.inventory = inv.toJSON();
+    current.armor = inv.armorJSON();
     current.mode = creative ? 'creative' : 'survival';
     current.time = time;
     current.gen = CM.GEN_VERSION;
@@ -920,6 +972,11 @@
     }
     if (mh && (!hit || mh.t < hit.t)) {
       const t = Items.tool(held);
+      // огниво: поджечь крипера — взорвётся через полторы секунды
+      if (held === CM.I.FLINT_STEEL && mh.mob.type === 'creeper') {
+        if (!mh.mob.lit) { mh.mob.lit = true; Snd.play('ignite', mh.mob.pos); Snd.play('fuse', mh.mob.pos); swing = 1; wearTool(); }
+        return;
+      }
       // ножницы: подстричь овцу
       if (held === CM.I.SHEARS && mh.mob.type === 'sheep') {
         if (!mh.mob.sheared) {
@@ -954,6 +1011,18 @@
       inv.takeOne(selected);
       swing = 1;
       selectSlot(selected);
+      return;
+    }
+    // Броня в руке: тап — надеть (надетая раньше часть встаёт в руку)
+    const arm = Items.armor(held);
+    if (arm) {
+      const k = arm.piece, old = inv.armor[k];
+      inv.armor[k] = inv.slots[selected];
+      inv.slots[selected] = old;
+      armorChanged();
+      selectSlot(selected);
+      Snd.play('equip');
+      toast(Items.name(held) + ' надет' + (k >= 2 ? 'ы' : ''));
       return;
     }
     // Яйцо призыва: моб появляется там, куда тапнули
@@ -1103,10 +1172,31 @@
     if (lavaT > 0.2) { lavaT = 0; shift(CM.TILES.lava, 0, 1); }
   }
 
+  // Урон с учётом брони: каждое очко брони — минус 4% урона (полная алмазная — минус 80%), броня изнашивается
+  let dmgFrac = 0;
+  function armorHurt(dmg) {
+    if (creative || player.health <= 0 || dmg <= 0) return;
+    const pts = inv.armorPoints();
+    if (!pts) { player.hurt(dmg); return; }
+    const total = dmg * (1 - pts * 0.04) + dmgFrac, whole = Math.floor(total);
+    dmgFrac = total - whole;
+    const wear = Math.max(1, Math.floor(dmg / 4));
+    inv.armor.forEach((s, k) => {
+      if (!s) return;
+      s.dur = (s.dur === undefined ? Items.armor(s.id).dur : s.dur) - wear;
+      if (s.dur <= 0) { toast(Items.name(s.id) + ' сломал' + (k >= 2 ? 'ись' : 'ся')); inv.armor[k] = null; }
+    });
+    armorChanged();
+    if (whole > 0) player.hurt(whole);
+    else Snd.play('hit');
+  }
+  function armorMats() { return inv.armor.map((s) => (s ? Items.armor(s.id).mat : null)); }
+  function armorChanged() { shownArmor = -1; }
+
   // Моб ударил игрока: урон и отбрасывание
   function hurtPlayer(dmg, from) {
     if (creative || player.health <= 0) return;
-    player.hurt(dmg);
+    armorHurt(dmg);
     const dx = player.pos[0] - from[0], dz = player.pos[2] - from[2], l = Math.hypot(dx, dz) || 1;
     player.vel[0] += dx / l * 5; player.vel[2] += dz / l * 5; player.vel[1] = Math.max(player.vel[1], 4);
   }
@@ -1146,7 +1236,7 @@
     Snd.play('explode', c);
     const pd = Math.hypot(player.pos[0] - c[0], player.pos[1] + 0.9 - c[1], player.pos[2] - c[2]);
     if (pd < 7) {
-      player.hurt(Math.floor((7 - pd) * 3));
+      armorHurt(Math.floor((7 - pd) * 3));
       const k = (7 - pd) * 2 / (pd || 1);
       player.vel[0] += (player.pos[0] - c[0]) * k; player.vel[2] += (player.pos[2] - c[2]) * k; player.vel[1] += 5;
     }
@@ -1282,7 +1372,7 @@
     const rec = {
       id: now.toString(36) + Math.random().toString(36).slice(2, 6),
       name: (current.name || 'Мир') + ' (копия)', seed: current.seed, seedText: String(current.seed), type: current.type,
-      mode: current.mode, inventory: inv.toJSON(), time, spawn: null, created: now, lastPlayed: now, version: VERSION, gen: CM.GEN_VERSION,
+      mode: current.mode, inventory: inv.toJSON(), armor: inv.armorJSON(), time, spawn: null, created: now, lastPlayed: now, version: VERSION, gen: CM.GEN_VERSION,
       player: { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: false },
     };
     const list = loadWorlds(); list.push(rec); saveWorlds(list);
@@ -1355,7 +1445,7 @@
       net.tPos += dt;
       if (net.tPos > 0.1 && net.peers.size) {
         net.tPos = 0;
-        netSend({ t: 'pos', id: net.id, p: player.pos.map((v) => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), s: player.sneaking ? 1 : 0 });
+        netSend({ t: 'pos', id: net.id, p: player.pos.map((v) => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), s: player.sneaking ? 1 : 0, a: armorMats() });
       }
       if (net.host) { net.tTime += dt; if (net.tTime > 5) { net.tTime = 0; netSend({ t: 'time', v: time }); } }
     }
@@ -1382,8 +1472,8 @@
         updatePauseNet();
       } else if (m.t === 'pos') {
         const r = net.peers.get(from);
-        if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; }
-        NET.sendExcept(from, JSON.stringify({ t: 'pos', id: from, p: m.p, yaw: m.yaw, pitch: m.pitch, s: m.s }));
+        if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; r.armor = m.a; }
+        NET.sendExcept(from, JSON.stringify({ t: 'pos', id: from, p: m.p, yaw: m.yaw, pitch: m.pitch, s: m.s, a: m.a }));
       } else if (m.t === 'set') {
         if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true);
         NET.sendExcept(from, JSON.stringify({ t: 'set', x: m.x, y: m.y, z: m.z, b: m.b }));
@@ -1400,7 +1490,7 @@
       toast(`Ты в мире игрока ${cleanNick(m.host)}`, 3000);
     } else if (m.t === 'pos') {
       const r = net.peers.get(m.id);
-      if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; }
+      if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; r.armor = m.a; }
     } else if (m.t === 'set') { if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true); }
     else if (m.t === 'join') { addPeer(m.id, m.name); toast(`${cleanNick(m.name)} присоединился к игре`); }
     else if (m.t === 'leave') removePeer(m.id);
@@ -1498,6 +1588,7 @@
       }
       renderHearts(player.health);
       renderHunger(player.food);
+      renderArmor();
       $('dpad').classList.toggle('flying', player.flying);
       if (player.health <= 0 && !creative) {
         // вещи остаются на месте гибели
@@ -1558,7 +1649,7 @@
     if (thirdPerson) {
       const sw = Math.sin(player.walk) * 0.9 * Math.min(1, hs / 2); // ноги и руки двигаются и в полёте
       CM.Models.build(m.normal, 'player', player.pos[0], player.pos[1], player.pos[2], player.yaw,
-        { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0, sneak: player.sneaking }, 1);
+        { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0, sneak: player.sneaking, armor: armorMats() }, 1);
     } else {
       const slot = inv.slots[selected], held = slot ? slot.id : 0;
       const hand = { swing, bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs), bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs), light: player.headInWater ? 0.7 : 1 };

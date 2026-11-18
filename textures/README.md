@@ -178,3 +178,20 @@
 | Яйцо призыва крипера | [`items/egg_creeper.png`](items/egg_creeper.png) | 32×32 |
 | Яйцо призыва паука | [`items/egg_spider.png`](items/egg_spider.png) | 32×32 |
 | Перо | [`items/feather.png`](items/feather.png) | 32×32 |
+| Кожа | [`items/leather.png`](items/leather.png) | 32×32 |
+| Кожаный шлем | [`items/leather_helmet.png`](items/leather_helmet.png) | 32×32 |
+| Кожаный нагрудник | [`items/leather_chestplate.png`](items/leather_chestplate.png) | 32×32 |
+| Кожаные поножи | [`items/leather_leggings.png`](items/leather_leggings.png) | 32×32 |
+| Кожаные ботинки | [`items/leather_boots.png`](items/leather_boots.png) | 32×32 |
+| Железный шлем | [`items/iron_helmet.png`](items/iron_helmet.png) | 32×32 |
+| Железный нагрудник | [`items/iron_chestplate.png`](items/iron_chestplate.png) | 32×32 |
+| Железные поножи | [`items/iron_leggings.png`](items/iron_leggings.png) | 32×32 |
+| Железные ботинки | [`items/iron_boots.png`](items/iron_boots.png) | 32×32 |
+| Золотой шлем | [`items/gold_helmet.png`](items/gold_helmet.png) | 32×32 |
+| Золотой нагрудник | [`items/gold_chestplate.png`](items/gold_chestplate.png) | 32×32 |
+| Золотые поножи | [`items/gold_leggings.png`](items/gold_leggings.png) | 32×32 |
+| Золотые ботинки | [`items/gold_boots.png`](items/gold_boots.png) | 32×32 |
+| Алмазный шлем | [`items/diamond_helmet.png`](items/diamond_helmet.png) | 32×32 |
+| Алмазный нагрудник | [`items/diamond_chestplate.png`](items/diamond_chestplate.png) | 32×32 |
+| Алмазные поножи | [`items/diamond_leggings.png`](items/diamond_leggings.png) | 32×32 |
+| Алмазные ботинки | [`items/diamond_boots.png`](items/diamond_boots.png) | 32×32 |

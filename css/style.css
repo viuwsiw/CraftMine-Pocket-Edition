@@ -557,3 +557,13 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 #hearts, #hunger { display: flex; gap: 1px; }
 #hunger { flex-direction: row-reverse; }
 #hunger i { width: var(--slot-heart); height: var(--slot-heart); background-size: 100% 100%; image-rendering: pixelated; }
+
+/* ---- Броня: шкала над сердцами и ячейки в инвентаре ---- */
+.stats-col { display: flex; flex-direction: column; gap: 2px; }
+#hunger { align-self: flex-end; }
+#armor { display: flex; gap: 1px; visibility: hidden; }
+#armor i { width: var(--slot-heart); height: var(--slot-heart); background-size: 100% 100%; image-rendering: pixelated; }
+.armor-row { display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+.armor-row .islot { width: calc((100% - 32px) / 9); flex: none; }
+.armor-row .islot.empty-armor { background-image: var(--ghost); background-size: 70% 70%; background-repeat: no-repeat; background-position: center; image-rendering: pixelated; }
+.armor-label { flex: 1; font-size: clamp(8px, 1.8vmin, 12px); color: #ddd; text-align: right; padding-right: 8px; }

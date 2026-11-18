@@ -95,6 +95,15 @@
       { c: [-6, 18, 0], s: [4, 12, 4], t: [T.pl_arm, T.pl_arm, T.pl_body, T.skin, T.pl_arm, T.pl_arm], pivot: [-6, 22, 0], swing: -1, arm: 'L', upper: true },
       { c: [6, 18, 0], s: [4, 12, 4], t: [T.pl_arm, T.pl_arm, T.pl_body, T.skin, T.pl_arm, T.pl_arm], pivot: [6, 22, 0], swing: 1, arm: 'R', upper: true },
       { c: [0, 28, 0], s: [8, 8, 8], t: [T.pl_head_side, T.pl_head_side, T.pl_head_top, T.skin, T.pl_head_back, T.pl_face], pivot: [0, 24, 0], head: true, upper: true },
+      // броня поверх (показывается, если надета): 0 шлем, 1 нагрудник, 2 поножи, 3 ботинки
+      { c: [0, 28.5, 0], s: [9, 9, 9], pivot: [0, 24, 0], head: true, upper: true, armor: 0 },
+      { c: [0, 18, 0], s: [9, 12.6, 5], upper: true, armor: 1 },
+      { c: [-6, 19, 0], s: [4.8, 6.5, 4.8], pivot: [-6, 22, 0], swing: -1, arm: 'L', upper: true, armor: 1 },
+      { c: [6, 19, 0], s: [4.8, 6.5, 4.8], pivot: [6, 22, 0], swing: 1, arm: 'R', upper: true, armor: 1 },
+      { c: [-2, 7.5, 0], s: [4.6, 9.2, 4.6], pivot: [-2, 12, 0], swing: 1, armor: 2 },
+      { c: [2, 7.5, 0], s: [4.6, 9.2, 4.6], pivot: [2, 12, 0], swing: -1, armor: 2 },
+      { c: [-2, 1.6, 0], s: [4.9, 3.4, 4.9], pivot: [-2, 12, 0], swing: 1, armor: 3 },
+      { c: [2, 1.6, 0], s: [4.9, 3.4, 4.9], pivot: [2, 12, 0], swing: -1, armor: 3 },
     ] },
   };
 
@@ -103,6 +112,12 @@
     const m = MODELS[name], sc = m.scale * (anim.scale || 1);
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
     for (const p of m.parts) {
+      let tiles = p.t;
+      if (p.armor !== undefined) {
+        const mat = anim.armor && anim.armor[p.armor];
+        if (!mat) continue;
+        tiles = all(T['armor_' + mat]);
+      }
       let a = 0;
       if (p.head) a = anim.headPitch || 0;
       else if (p.swing) a = p.swing * (anim.swing || 0);
@@ -131,7 +146,7 @@
         qx *= sc; qy *= sc; qz *= sc;
         return [x + qx * cy + qz * sy, y + qy, z - qx * sy + qz * cy];
       };
-      Geo.partVerts(out, p.c, p.s, p.t, xf, light);
+      Geo.partVerts(out, p.c, p.s, tiles, xf, light);
     }
   }
 
@@ -162,7 +177,7 @@
   // ---------- Животные ----------
   const MOB = {
     pig: { hw: 0.4, h: 0.9, hp: 10, speed: 1.1, drops: [[I.PORK_RAW, 1, 2]] },
-    cow: { hw: 0.45, h: 1.35, hp: 10, speed: 0.9, drops: [[I.BEEF_RAW, 1, 2]] },
+    cow: { hw: 0.45, h: 1.35, hp: 10, speed: 0.9, drops: [[I.BEEF_RAW, 1, 2], [I.LEATHER, 0, 2]] },
     sheep: { hw: 0.45, h: 1.1, hp: 8, speed: 1.0, drops: [[I.MUTTON_RAW, 1, 1], [B.WOOL, 1, 1]] },
     chicken: { hw: 0.2, h: 0.7, hp: 4, speed: 0.8, drops: [[I.CHICKEN_RAW, 1, 1], [I.FEATHER, 0, 2]] },
     // Враждебные: нападают ночью и в темноте пещер (паук днём мирный, пока его не ударят)
@@ -234,6 +249,14 @@
       v[0] += (tx - v[0]) * k; v[2] += (tz - v[2]) * k;
       if (this.type === 'chicken' && v[1] < -2) v[1] = -2; // курица планирует
       const hit = this.simpleMove(dt, world, 1.6);
+      // Урон от падения: больше 3 блоков — по полсердца за блок (курица планирует и не разбивается)
+      if (this.inWater || this.type === 'chicken' || (d.climb && hit)) this.fallTop = null;
+      else if (!this.onGround) { if (this.fallTop == null || p[1] > this.fallTop) this.fallTop = p[1]; }
+      else if (this.fallTop != null) {
+        const fall = this.fallTop - p[1];
+        this.fallTop = null;
+        if (fall > 3.5) { this.health -= Math.floor(fall - 3); this.hurtTime = 0.4; }
+      }
       if (hit && this.moving) {
         if (d.climb) v[1] = 3.2;           // паук лезет по стене
         else if (this.onGround) v[1] = 7.6; // запрыгнуть на блок
@@ -261,6 +284,13 @@
       let aggro = !ctx.creative && pl.health > 0 && dist < 16 && Math.abs(dy) < 8;
       if (d.neutralDay && !ctx.night && !this.angry) aggro = false;
       this.flee = false;
+      // подожжённый огнивом крипер взрывается в любом случае
+      if (this.lit) {
+        this.moving = false;
+        this.fuse = (this.fuse || 0) + dt;
+        if (this.fuse >= 1.5) { ctx.explode(this); this.health = 0; this.exploded = true; }
+        return false;
+      }
       if (!aggro) { if (this.fuse) this.fuse = Math.max(0, this.fuse - dt); return false; }
       this.yawTarget = Math.atan2(-dx, -dz);
       this.moving = true;
@@ -507,7 +537,7 @@
       }
       // Другие игроки в сетевой игре
       for (const r of this.remote || []) {
-        buildModel(normal, 'player', r.pos[0], r.pos[1], r.pos[2], r.yaw, { swing: Math.sin(r.walk || 0) * 0.7 * Math.min(1, r.speed || 0), headPitch: r.pitch, sneak: r.sneak }, 1);
+        buildModel(normal, 'player', r.pos[0], r.pos[1], r.pos[2], r.yaw, { swing: Math.sin(r.walk || 0) * 0.7 * Math.min(1, r.speed || 0), headPitch: r.pitch, sneak: r.sneak, armor: r.armor }, 1);
       }
       for (const it of this.items) {
         const a = it.spin + it.age * 1.8, ca = Math.cos(a), sa = Math.sin(a);

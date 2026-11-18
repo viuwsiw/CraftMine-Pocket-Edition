@@ -159,6 +159,7 @@
     arrow_hit: (d, t) => { noise(d, t, 0.05, 'bandpass', 900, 3, 0.4); tone(d, t, 0.08, 'triangle', 300, 220, 0.15); },
     shear: (d, t) => { for (let i = 0; i < 2; i++) noise(d, t + i * 0.09, 0.05, 'highpass', 3500, 2, 0.4); },
     splash: (d, t) => { noise(d, t, 0.45, 'lowpass', 1600, 0.6, 0.5, 0.01); noise(d, t + 0.05, 0.3, 'bandpass', 3000, 1, 0.15); },
+    equip: (d, t) => { for (let i = 0; i < 3; i++) noise(d, t + i * 0.05, 0.05, 'bandpass', 2400 + i * 400, 3, 0.3); },
     door: (d, t) => { tone(d, t, 0.25, 'sawtooth', 140, 110, 0.08, 0.03); noise(d, t + 0.18, 0.08, 'bandpass', 500, 2, 0.4); },
   };
 

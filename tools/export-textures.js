@@ -108,7 +108,7 @@ ${table(d.items, false)}
       let dir = 'blocks';
       if (itemTiles.has(name)) dir = 'items';
       else if (/^(pig|cow|sheep|chicken|zombie|skel|creeper|spider)_/.test(name)) dir = 'mobs';
-      else if (/^pl_/.test(name) || name === 'skin') dir = 'player';
+      else if (/^(pl|armor)_/.test(name) || name === 'skin') dir = 'player';
       else if (MISC.includes(name)) dir = 'misc';
       files.push({ file: `${dir}/${name}.png`, b64: png([name], 1, 1) });
     }

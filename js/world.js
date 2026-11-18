@@ -29,7 +29,7 @@
   // Предметы, которые не являются блоками (id >= 256)
   const I = { STICK: 256, COAL: 257, IRON_INGOT: 258, GOLD_INGOT: 259, DIAMOND: 260,
     PORK_RAW: 261, PORK: 262, BEEF_RAW: 263, BEEF: 264, MUTTON_RAW: 265, MUTTON: 266, CHICKEN_RAW: 267, CHICKEN: 268,
-    TOOL: 272, ROTTEN_FLESH: 301, GUNPOWDER: 302, STRING: 303, BONE: 304, ARROW: 305, BOW: 306, FLINT: 307, FLINT_STEEL: 308, SHEARS: 309, EGG: 310, FEATHER: 320 }; // EGG + номер моба — яйца призыва // инструменты: TOOL + материал*4 + тип (кирка, топор, лопата, меч)
+    TOOL: 272, ROTTEN_FLESH: 301, GUNPOWDER: 302, STRING: 303, BONE: 304, ARROW: 305, BOW: 306, FLINT: 307, FLINT_STEEL: 308, SHEARS: 309, EGG: 310, FEATHER: 320, LEATHER: 321, ARMOR: 330 }; // ARMOR + материал*4 + часть (шлем, нагрудник, поножи, ботинки) // EGG + номер моба — яйца призыва // инструменты: TOOL + материал*4 + тип (кирка, топор, лопата, меч)
 
   Object.assign(B, { COAL_ORE: 15, IRON_ORE: 16, GOLD_ORE: 17, DIAMOND_ORE: 18, CRAFTING: 19, FURNACE: 20, CHEST: 24, WOOL: 28, BED: 64 });
   const ore = (name, t) => ({ name, solid: true, opaque: true, tex: [t, t, t] });
