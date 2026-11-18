@@ -1,11 +1,20 @@
 'use strict';
-// CraftMine PE — свои текстуры игрока: загрузка PNG для каждого блока и предмета.
-// Хранятся в localStorage по имени тайла (craftmine.tex.<тайл>) и переживают обновления игры.
+// CraftMine PE — текстуры из PNG.
+// 1) Пак игры: PNG из папки textures/ (встроены в js/texture_pack.js при сборке) — основные текстуры.
+//    Нарисованные кодом текстуры остаются только запасными для отсутствующих файлов.
+// 2) Свои текстуры игрока: загрузка PNG для каждого блока и предмета в экране «Текстуры».
+//    Хранятся в localStorage по имени тайла (craftmine.tex.<тайл>) и переживают обновления игры.
 (function (CM) {
   const T = CM.Textures, TILES = CM.TILES;
   const TS = T.tile, per = T.perRow, ctx = T.ctx;
   const PREFIX = 'craftmine.tex.';
-  const orig = ctx.getImageData(0, 0, T.atlas.width, T.atlas.height); // исходный атлас для сброса
+  let orig = ctx.getImageData(0, 0, T.atlas.width, T.atlas.height); // стандартный атлас (после пака) для сброса
+  // Картинки из нескольких тайлов: файл -> тайлы по строкам, ширина и высота в тайлах
+  const COMBINED = {
+    'blocks/door.png': { tiles: ['door_top', 'door_bottom'], w: 1, h: 2 },
+    'blocks/bed_top.png': { tiles: ['bed_top_head', 'bed_top_foot'], w: 1, h: 2 },
+    'blocks/bed_side.png': { tiles: ['bed_side_head', 'bed_side_foot'], w: 2, h: 1 },
+  };
   const tileName = {};
   for (const n in TILES) tileName[TILES[n]] = n;
 
@@ -25,9 +34,48 @@
   }
   const loadImage = (url) => new Promise((ok, fail) => { const im = new Image(); im.onload = () => ok(im); im.onerror = fail; im.src = url; });
 
-  // Применить все сохранённые текстуры к атласу (при запуске)
-  async function loadSaved() {
+  // Разрезать картинку w×h тайлов и положить в атлас
+  function drawSplit(img, tiles, w, h) {
+    const cw = img.naturalWidth / w, ch = img.naturalHeight / h;
+    tiles.forEach((t, k) => {
+      const c = document.createElement('canvas');
+      c.width = c.height = TS;
+      const g = c.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, (k % w) * cw, Math.floor(k / w) * ch, cw, ch, 0, 0, TS, TS);
+      drawTile(t, c);
+    });
+  }
+
+  // Пак игры из textures/: имя файла = имя тайла (любой размер, приводится к 32×32)
+  async function applyPack() {
+    const pack = CM.TEXTURE_PACK;
+    if (!pack || /[?&]nopack\b/.test(location.search)) return 0;
     let n = 0;
+    for (const file in pack) {
+      let img;
+      try { img = await loadImage(pack[file]); } catch (_) { console.warn('Текстура не открылась:', file); continue; }
+      const c = COMBINED[file];
+      if (c) { drawSplit(img, c.tiles, c.w, c.h); n++; continue; }
+      const name = file.replace(/^.*\//, '').replace(/\.png$/i, '');
+      if (!(name in TILES)) { console.warn('Неизвестная текстура в паке:', file); continue; }
+      let ih = img.naturalHeight;
+      if (ih > img.naturalWidth && ih % img.naturalWidth === 0) ih = img.naturalWidth; // полоса кадров — первый кадр
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = TS;
+      const g = cv.getContext('2d');
+      g.imageSmoothingEnabled = false;
+      g.drawImage(img, 0, 0, img.naturalWidth, ih, 0, 0, TS, TS);
+      drawTile(name, cv);
+      n++;
+    }
+    return n;
+  }
+
+  // При запуске: пак игры, затем свои текстуры игрока поверх. Возвращает число применённых файлов.
+  async function loadSaved() {
+    let n = await applyPack();
+    orig = ctx.getImageData(0, 0, T.atlas.width, T.atlas.height);
     for (const name in TILES) {
       const url = store.get(name);
       if (!url) continue;

@@ -10,6 +10,9 @@ OUT=$ROOT/dist/CraftMine-PE-$VERSION.apk
 B=build
 rm -rf $B && mkdir -p $B/classes $B/assets $ROOT/dist
 
+echo "[0/6] Текстуры из textures/ -> js/texture_pack.js"
+(cd $ROOT && python3 tools/pack-textures.py)
+
 echo "[1/6] Копирую игру в assets"
 cp $ROOT/index.html $B/assets/
 cp -r $ROOT/css $ROOT/js $ROOT/fonts $B/assets/

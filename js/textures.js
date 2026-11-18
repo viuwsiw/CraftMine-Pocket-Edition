@@ -14,7 +14,7 @@
   let curX = 0, curY = 0;
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = ATLAS;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const rand = CM.mulberry32(20261116);
 
   const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));

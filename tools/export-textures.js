@@ -2,7 +2,11 @@
 // Текстуры в игре рисуются кодом (js/textures.js, js/textures_hd.js, js/sprites.js);
 // этот скрипт запускает игру в браузере без экрана и сохраняет каждый тайл отдельным файлом.
 //
-// Запуск из корня репозитория:  node tools/export-textures.js
+// Папка textures/ — источник текстур для сборки (tools/pack-textures.py встраивает её в игру),
+// поэтому по умолчанию скрипт только ДОБАВЛЯЕТ отсутствующие файлы и не трогает уже лежащие PNG.
+// --force перезаписывает все файлы рисунком из кода.
+//
+// Запуск из корня репозитория:  node tools/export-textures.js [--force]
 // Нужен Node.js и Playwright с Chromium (npm i -D playwright && npx playwright install chromium).
 const path = require('path');
 const fs = require('fs');
@@ -29,13 +33,22 @@ function readme(d) {
   ].join('\n');
   return `# Текстуры CraftMine: Pocket Edition
 
-Все текстуры игры в PNG, тайл ${d.tile}×${d.tile}. Это собственный рисунок игры: он генерируется кодом
-(\`js/textures.js\`, \`js/textures_hd.js\`, \`js/sprites.js\`), а эта папка — его выгрузка.
+Все текстуры игры в PNG, тайл ${d.tile}×${d.tile}. Исходный рисунок сделан кодом (\`js/textures.js\`,
+\`js/textures_hd.js\`, \`js/sprites.js\`) и выгружен сюда; если какого-то файла нет, игра берёт рисунок из кода.
 
-> Папку не редактируют вручную: после изменений в коде текстур её пересобирают командой
-> \`node tools/export-textures.js\` (нужны Node.js и Playwright с Chromium).
+> **Эта папка — источник текстур для сборки.** При сборке (\`android/build.sh\`) все PNG отсюда встраиваются
+> в игру (\`tools/pack-textures.py\` → \`js/texture_pack.js\`). Замени PNG здесь (в GitHub или локально),
+> и следующая сборка будет с новой текстурой. Имя файла = имя текстуры; размер любой с теми же пропорциями.
 
-## Как поменять текстуру в игре
+## Как поменять текстуру для всех (в сборке)
+
+1. Открой нужный PNG в этой папке, перерисуй, сохрани под тем же именем (в GitHub: **Add file → Upload files** в эту папку, с заменой).
+2. Следующая сборка APK возьмёт новую картинку.
+
+Новые файлы из кода добавляет \`node tools/export-textures.js\` — уже лежащие PNG он не трогает
+(\`--force\` перезапишет всё рисунком из кода).
+
+## Как поменять текстуру только у себя (в игре)
 
 1. Скачай нужный PNG отсюда и перерисуй его (любой размер с теми же пропорциями: 16×16, 32×32, 64×64…).
 2. В игре: **Настройки → Текстуры**, найди блок или предмет, нажми **PNG** у нужной стороны и выбери файл.
@@ -68,7 +81,9 @@ ${table(d.items, false)}
 (async () => {
   const browser = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {});
   const page = await browser.newPage();
-  await page.goto('file://' + path.join(ROOT, 'index.html'));
+  const FORCE = process.argv.includes('--force');
+  await page.goto('file://' + path.join(ROOT, 'index.html') + (FORCE ? '?nopack' : ''));
+  await page.waitForTimeout(1500); // пак применяется асинхронно
   await page.waitForFunction(() => window.CM && CM.Items && CM.TexPack);
 
   const data = await page.evaluate(({ COMBINED, MISC }) => {
@@ -108,10 +123,11 @@ ${table(d.items, false)}
     return { files, tile: TS, blocks: rows(ent.blocks), items: rows(ent.items) };
   }, { COMBINED, MISC });
 
-  fs.rmSync(OUT, { recursive: true, force: true });
   const counts = {};
+  let kept = 0;
   for (const f of data.files) {
     const p = path.join(OUT, f.file);
+    if (!FORCE && f.file !== 'atlas.png' && fs.existsSync(p)) { kept++; continue; }
     fs.mkdirSync(path.dirname(p), { recursive: true });
     fs.writeFileSync(p, Buffer.from(f.b64, 'base64'));
     const d = f.file.includes('/') ? f.file.split('/')[0] : '.';
@@ -119,5 +135,5 @@ ${table(d.items, false)}
   }
   await browser.close();
   fs.writeFileSync(path.join(OUT, 'README.md'), readme(data));
-  console.log(`Сохранено ${data.files.length} PNG (тайл ${data.tile}×${data.tile}) в textures/:`, counts);
+  console.log(`Оставлено как есть: ${kept}. Записано ${data.files.length - kept} PNG (тайл ${data.tile}×${data.tile}) в textures/:`, counts);
 })();
