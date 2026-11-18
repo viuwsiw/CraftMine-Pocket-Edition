@@ -1,14 +1,7 @@
 # Сборка iOS-версии на macOS в GitHub Actions. Готовый .ipa — в артефактах запуска (Actions → запуск → Artifacts).
 name: iOS build
+# Пока iOS-версия отложена — запускается только вручную (Actions → iOS build → Run workflow)
 on:
-  push:
-    paths:
-      - 'ios/**'
-      - 'js/**'
-      - 'css/**'
-      - 'index.html'
-      - 'textures/**'
-      - '.github/workflows/ios.yml'
   workflow_dispatch:
 jobs:
   ios:

@@ -8,7 +8,7 @@ ROOT=..
 VERSION=$(grep -o 'android:versionName="[^"]*"' $ROOT/android/AndroidManifest.xml | cut -d'"' -f2)
 
 echo "[1/4] Текстуры и игра -> CraftMine/www"
-(cd $ROOT && python3 tools/pack-textures.py)
+(cd $ROOT && python3 tools/pack-textures.py && python3 tools/pack-sounds.py)
 rm -rf CraftMine/www && mkdir -p CraftMine/www
 cp $ROOT/index.html CraftMine/www/
 cp -r $ROOT/css $ROOT/js $ROOT/fonts CraftMine/www/

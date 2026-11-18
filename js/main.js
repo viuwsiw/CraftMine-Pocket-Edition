@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 6';
+  const VERSION = '0.1.0 alpha build 7';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 

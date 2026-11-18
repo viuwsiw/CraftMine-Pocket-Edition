@@ -18,7 +18,46 @@
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    decodePack();
     return ac;
+  }
+
+  // ---- записанные звуки (свободные CC0, папка sounds/ -> js/sound_pack.js) ----
+  const buffers = {}; // событие -> [AudioBuffer]
+  function decodePack() {
+    const pack = CM.SOUND_PACK || {};
+    for (const key in pack) {
+      buffers[key] = [];
+      for (const url of pack[key]) {
+        try {
+          const bin = atob(url.slice(url.indexOf(',') + 1)), bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const done = (b) => { if (b) buffers[key].push(b); };
+          const pr = ac.decodeAudioData(bytes.buffer, done, () => {});
+          if (pr && pr.catch) pr.catch(() => {});
+        } catch (_) { /* ignore */ }
+      }
+    }
+  }
+  // что играть для события: свой вариант, похожий материал, иначе синтез
+  const ALIAS = { dig_grass: 'step_grass', dig_sand: 'step_sand', dig_gravel: 'step_gravel', dig_snow: 'step_snow',
+    break_grass: 'step_grass', break_sand: 'step_sand', break_gravel: 'step_gravel', break_snow: 'step_snow',
+    place_stone: 'step_stone', place_wood: 'step_wood', place_grass: 'step_grass', place_sand: 'step_sand', place_gravel: 'step_gravel', place_snow: 'step_snow', place_glass: 'step_stone' };
+  const VOL = { step: 0.45, dig: 0.6, place: 0.7, break: 0.85, pop: 0.6, hurt: 0.8, mob: 0.7 };
+  function sample(key) {
+    let k = key;
+    if (!(buffers[k] && buffers[k].length) && ALIAS[k]) k = ALIAS[k];
+    const list = buffers[k];
+    return list && list.length ? list[Math.floor(Math.random() * list.length)] : null;
+  }
+  function playBuffer(buf, dest, t, kind) {
+    const src = ac.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = (kind === 'step' ? 0.88 : 0.93) + Math.random() * (kind === 'step' ? 0.24 : 0.14);
+    const g = ac.createGain();
+    g.gain.value = VOL[kind] || 0.8;
+    src.connect(g); g.connect(dest);
+    src.start(t);
   }
   // Браузеры разрешают звук только после касания экрана
   for (const ev of ['pointerdown', 'touchstart', 'keydown']) window.addEventListener(ev, () => ensure(), { passive: true });
@@ -136,13 +175,17 @@
     }
     const t = ac.currentTime + 0.005;
     const d = out(gain, pan);
-    if (name.startsWith('mob_')) { const f = MOB[name.slice(4)]; if (f) f(d, t); }
+    const key = (name === 'step' || name === 'dig' || name === 'break' || name === 'place') ? name + '_' + (arg || 'stone') : name;
+    const buf = sample(key);
+    if (buf) playBuffer(buf, d, t, name.startsWith('mob_') ? 'mob' : name);
+    else if (name.startsWith('mob_')) { const f = MOB[name.slice(4)]; if (f) f(d, t); }
     else if (S[name]) S[name](d, t, arg);
-    setTimeout(() => { try { d.disconnect(); } catch (_) { /* ignore */ } }, 2500);
+    setTimeout(() => { try { d.disconnect(); } catch (_) { /* ignore */ } }, 3500);
   }
 
   CM.Sound = {
     play, matOf,
+    loaded() { let n = 0; for (const k in buffers) n += buffers[k].length; return n; },
     setListener(x, y, z, yaw) { listener = [x, y, z, yaw]; },
     setVolume(v) { volume = Math.max(0, Math.min(1, v)); if (master) master.gain.value = volume; },
     setEnabled(on) { enabled = on; },

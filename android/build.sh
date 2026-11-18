@@ -11,7 +11,7 @@ B=build
 rm -rf $B && mkdir -p $B/classes $B/assets $ROOT/dist
 
 echo "[0/6] Текстуры из textures/ -> js/texture_pack.js"
-(cd $ROOT && python3 tools/pack-textures.py)
+(cd $ROOT && python3 tools/pack-textures.py && python3 tools/pack-sounds.py)
 
 echo "[1/6] Копирую игру в assets"
 cp $ROOT/index.html $B/assets/
