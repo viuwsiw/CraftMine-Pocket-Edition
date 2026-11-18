@@ -18,7 +18,7 @@
     <div class="logo-wrap">
       <h1 class="logo">CraftMine</h1>
       <div class="subtitle">Pocket Edition</div>
-      <div class="version-top">v0.1.0 alpha build 2</div>
+      <div class="version-top">v0.1.0 alpha build 3</div>
     </div>
     <div class="tiles">
       <button class="tile" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""></button>
@@ -95,17 +95,17 @@
         <span>Никнейм (до 16 символов)</span>
         <input id="set-nick" type="text" maxlength="16" autocomplete="off" spellcheck="false">
       </label>
-      <label class="field">
-        <span>Дальность прорисовки: <b id="val-rd"></b> чанк.</span>
-        <input id="set-rd" type="range" min="2" max="8" step="1">
-      </label>
       <div class="field">
-        <span>Чувствительность камеры: <b class="val-sens"></b>%</span>
-        <div class="stepper">
-          <button class="btn sbtn" data-sens="-10">−</button>
-          <input id="set-sens" type="range" min="10" max="400" step="5">
-          <button class="btn sbtn" data-sens="10">+</button>
-        </div>
+        <span>Дальность прорисовки, чанков</span>
+        <div class="stepper"><button class="btn sbtn" data-step="renderDistance:-1">−</button><b class="sval" id="val-rd"></b><button class="btn sbtn" data-step="renderDistance:1">+</button></div>
+      </div>
+      <div class="field">
+        <span>Чувствительность камеры, %</span>
+        <div class="stepper"><button class="btn sbtn" data-step="sensitivity:-10">−</button><b class="sval val-sens"></b><button class="btn sbtn" data-step="sensitivity:10">+</button></div>
+      </div>
+      <div class="field">
+        <span>Управление: размер крестовины, %</span>
+        <div class="stepper"><button class="btn sbtn" data-step="dpadScale:-10">−</button><b class="sval" id="val-dpad"></b><button class="btn sbtn" data-step="dpadScale:10">+</button></div>
       </div>
       <label class="check"><input id="set-autojump" type="checkbox"> Автопрыжок</label>
       <label class="check"><input id="set-falldmg" type="checkbox"> Урон от падения</label>
@@ -173,9 +173,9 @@
     <div class="pause-info" id="net-info"></div>
     <div class="stepper pause-sens">
       <span>Чувствительность</span>
-      <button class="btn sbtn" data-sens="-10">−</button>
+      <button class="btn sbtn" data-step="sensitivity:-10">−</button>
       <b class="val-sens"></b>
-      <button class="btn sbtn" data-sens="10">+</button>
+      <button class="btn sbtn" data-step="sensitivity:10">+</button>
     </div>
     <div class="menu-buttons">
       <button class="btn big" id="btn-resume">Продолжить</button>

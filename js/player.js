@@ -260,6 +260,7 @@
       }
       // Покачивание камеры при ходьбе
       const hs = Math.hypot(v[0], v[2]);
+      this.walk = (this.walk || 0) + dt * Math.min(hs, 6) * 2.2; // фаза шага для модели (и в полёте, и в воде)
       if (this.onGround && hs > 0.5) this.bob += dt * hs * 2.2;
       else this.bob *= Math.pow(0.02, dt);
     }

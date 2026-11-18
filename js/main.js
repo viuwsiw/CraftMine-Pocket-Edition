@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 2';
+  const VERSION = '0.1.0 alpha build 3';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -20,6 +20,7 @@
   const settings = Object.assign({
     renderDistance: isTouch ? 4 : 6,
     sensitivity: 100,
+    dpadScale: 100,       // размер крестовины, %
     autoJump: true,
     fallDamage: true,
     showCoords: false,
@@ -580,9 +581,8 @@
   // Настройки
   function syncSettingsUI() {
     $('set-nick').value = nick();
-    $('set-rd').value = settings.renderDistance;
     $('val-rd').textContent = settings.renderDistance;
-    $('set-sens').value = settings.sensitivity;
+    $('val-dpad').textContent = settings.dpadScale;
     document.querySelectorAll('.val-sens').forEach((el) => { el.textContent = settings.sensitivity; });
     $('set-autojump').checked = settings.autoJump;
     $('set-falldmg').checked = settings.fallDamage;
@@ -591,15 +591,20 @@
     $('set-lowq').checked = settings.lowQuality;
   }
   function openSettings() { syncSettingsUI(); show('screen-settings'); }
-  $('set-rd').addEventListener('input', (e) => { settings.renderDistance = +e.target.value; syncSettingsUI(); });
-  $('set-sens').addEventListener('input', (e) => { settings.sensitivity = +e.target.value; syncSettingsUI(); });
-  // Кнопки «−» и «+» у чувствительности (в настройках и в меню паузы), сохраняются сразу
-  document.querySelectorAll('[data-sens]').forEach((b) => b.addEventListener('click', (e) => {
+  // Числовые настройки — только кнопками «−» и «+» (без ползунков: меньше случайных нажатий), сохраняются сразу
+  const LIMITS = { renderDistance: [2, 8], sensitivity: [10, 400], dpadScale: [60, 200] };
+  document.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', (e) => {
     e.preventDefault();
-    settings.sensitivity = Math.max(10, Math.min(400, settings.sensitivity + +b.dataset.sens));
+    const [key, d] = b.dataset.step.split(':'), [lo, hi] = LIMITS[key];
+    settings[key] = Math.max(lo, Math.min(hi, (+settings[key] || 0) + +d));
     store.set('settings', settings);
+    if (key === 'dpadScale') applyDpad();
     syncSettingsUI();
   }));
+  function applyDpad() {
+    document.documentElement.style.setProperty('--dpad', `calc(clamp(46px, 11vmin, 76px) * ${(settings.dpadScale || 100) / 100})`);
+  }
+  applyDpad();
   $('set-autojump').addEventListener('change', (e) => { settings.autoJump = e.target.checked; });
   $('set-falldmg').addEventListener('change', (e) => { settings.fallDamage = e.target.checked; });
   $('set-coords').addEventListener('change', (e) => { settings.showCoords = e.target.checked; });
@@ -1425,7 +1430,7 @@
     const m = ents.meshes();
     const hs = Math.hypot(player.vel[0], player.vel[2]);
     if (thirdPerson) {
-      const sw = Math.sin(player.bob) * 0.9 * Math.min(1, hs / 2);
+      const sw = Math.sin(player.walk) * 0.9 * Math.min(1, hs / 2); // ноги и руки двигаются и в полёте
       CM.Models.build(m.normal, 'player', player.pos[0], player.pos[1], player.pos[2], player.yaw,
         { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0 }, 1);
     } else {

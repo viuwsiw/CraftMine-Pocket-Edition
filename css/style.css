@@ -548,3 +548,4 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
   #screen-pause .pause-info { line-height: 1.5; }
   .pause-sens { margin: 2px 0 6px; }
 }
+.stepper .sval { flex: 1; text-align: center; font-size: clamp(12px, 2.6vmin, 18px); color: #ffe066; }
