@@ -287,10 +287,11 @@
   const MOBX = { zombie_face: '#4f8238', zombie_head: '#4f8238', zombie_body: '#1f8a8a', zombie_arm: '#4f8238', zombie_leg: '#3a3a8c',
     skel_face: '#c8c8c8', skel_head: '#c8c8c8', skel_body: '#3c3c3c', skel_limb: '#c8c8c8',
     creeper_face: '#45922f', creeper_head: '#45922f', creeper_body: '#45922f', creeper_foot: '#357a2a',
-    spider_face: '#221c1e', spider_body: '#221c1e', spider_leg: '#30282a' };
+    spider_face: '#221c1e', spider_body: '#221c1e', spider_leg: '#30282a',
+    chicken_beak: '#f0b020', chicken_wattle: '#c82020', cow_nose: '#c9b8a4', cow_horn: '#ece6d6', sheep_skin: '#d8b89e' };
   for (const n in MOBX) { const c = hex(MOBX[n]); paint(n, () => vary(c, 0.1)); }
   const ITX = { rotten_flesh: '#8a5a3a', gunpowder: '#5a5a5a', string: '#e8e8e8', bone: '#ecebdc', arrow: '#9a9aa0',
+    bow: '#8a6234', flint: '#3a3a40', flint_and_steel: '#9a9aa0', shears: '#d8d8dc', feather: '#f4f4f4',
     egg_pig: '#f0a0a8', egg_cow: '#4a3424', egg_sheep: '#e8e8e8', egg_chicken: '#d8d8d8', egg_zombie: '#1f9090', egg_skeleton: '#c8c8c8', egg_creeper: '#3a9a2a', egg_spider: '#2e2628' };
   for (const n in ITX) { const c = hex(ITX[n]); paint(n, (x, y) => ((x - 7.5) ** 2 + (y - 7.5) ** 2 < 30 ? c : [0, 0, 0, 0])); }
-  paint('camera', (x, y) => (inR(x, y, 1, 5, 14, 12) ? (inR(x, y, 4, 7, 6, 9) ? [60, 110, 190, 255] : [70, 70, 80, 255]) : [0, 0, 0, 0]));
 })(window.CM);

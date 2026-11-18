@@ -1,1 +1,6 @@
 android/build/
+ios/build/
+ios/CraftMine/www/
+ios/CraftMinePE.xcodeproj/
+ios/Payload/
+ios/CraftMine/Info.plist

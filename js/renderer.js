@@ -408,6 +408,15 @@ void main() {
       return this.canvas.toDataURL();
     }
 
+    // Обновить один тайл атласа (анимация воды и лавы)
+    updateTile(tile) {
+      const gl = this.gl, TS = CM.Textures.tile, per = CM.Textures.perRow;
+      const x = (tile % per) * TS, y = Math.floor(tile / per) * TS;
+      const img = CM.Textures.ctx.getImageData(x, y, TS, TS);
+      gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+      gl.texSubImage2D(gl.TEXTURE_2D, 0, x, y, gl.RGBA, gl.UNSIGNED_BYTE, img);
+    }
+
     // Атлас изменился (свои текстуры) — загрузить заново
     updateAtlas() {
       const gl = this.gl;

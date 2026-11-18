@@ -29,7 +29,7 @@
   // Предметы, которые не являются блоками (id >= 256)
   const I = { STICK: 256, COAL: 257, IRON_INGOT: 258, GOLD_INGOT: 259, DIAMOND: 260,
     PORK_RAW: 261, PORK: 262, BEEF_RAW: 263, BEEF: 264, MUTTON_RAW: 265, MUTTON: 266, CHICKEN_RAW: 267, CHICKEN: 268,
-    TOOL: 272, CAMERA: 300, ROTTEN_FLESH: 301, GUNPOWDER: 302, STRING: 303, BONE: 304, ARROW: 305, EGG: 310 }; // EGG + номер моба — яйца призыва // инструменты: TOOL + материал*4 + тип (кирка, топор, лопата, меч)
+    TOOL: 272, ROTTEN_FLESH: 301, GUNPOWDER: 302, STRING: 303, BONE: 304, ARROW: 305, BOW: 306, FLINT: 307, FLINT_STEEL: 308, SHEARS: 309, EGG: 310, FEATHER: 320 }; // EGG + номер моба — яйца призыва // инструменты: TOOL + материал*4 + тип (кирка, топор, лопата, меч)
 
   Object.assign(B, { COAL_ORE: 15, IRON_ORE: 16, GOLD_ORE: 17, DIAMOND_ORE: 18, CRAFTING: 19, FURNACE: 20, CHEST: 24, WOOL: 28, BED: 64 });
   const ore = (name, t) => ({ name, solid: true, opaque: true, tex: [t, t, t] });
@@ -726,6 +726,12 @@
             else if (rk === R_GLASS) visible = !OPAQUE[nid] && nid !== id;
             else visible = !OPAQUE[nid] && (nid !== id || LEAFY[id]);
             if (fl && F.d === 1 && F.s > 0 && topH < 1) visible = FLUID[nid] !== fl; // поверхность видна, если сверху не та же жидкость
+            // бок жидкости рядом с той же жидкостью пониже: рисуем полоску от её поверхности до своей
+            let botH = 0;
+            if (fl && !visible && F.d !== 1 && FLUID[nid] === fl) {
+              const nh = fluidHeight(nid, get(x + F.n[0], y + 1, z + F.n[2]));
+              if (nh < topH - 0.01) { visible = true; botH = nh; }
+            }
             if (!visible) continue;
 
             let tile = blk.tex.length === 6 ? blk.tex[f] : blk.tex[F.texSlot];
@@ -736,8 +742,8 @@
             for (let k = 0; k < 4; k++) {
               const cu = F.corners[k][0], cv = F.corners[k][1];
               lp[F.d] = F.s > 0 ? 1 : 0; lp[F.u] = cu; lp[F.v] = cv;
-              if (fl) {
-                ao[k] = 3;
+              if (fl || rk === R_GLASS) {
+                ao[k] = 3; // у жидкостей и льда нет затенения по углам
               } else {
                 p[0] = x + F.n[0]; p[1] = y + F.n[1]; p[2] = z + F.n[2];
                 const du = cu ? 1 : -1, dv = cv ? 1 : -1;
@@ -751,11 +757,11 @@
               }
               let ly = lp[1];
               if (ly === 1) ly = topH;
+              else if (F.d !== 1) ly = botH;
               let tu, tv;
               if (F.d === 1) { tu = lp[0]; tv = lp[2]; }
               else if (F.d === 0) { tu = lp[2]; tv = 1 - ly; }
               else { tu = lp[0]; tv = 1 - ly; }
-              if (F.d !== 1 && fl) tv = 1 - lp[1];
               tu = u0 + UV_EPS + tu * (tileStep - 2 * UV_EPS);
               tv = v0 + UV_EPS + tv * (tileStep - 2 * UV_EPS);
               const b = k * 6;

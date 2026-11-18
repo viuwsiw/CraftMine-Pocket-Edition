@@ -21,23 +21,38 @@
   const MODELS = {
     pig: { scale: 1 / 16, parts: quadruped({ leg: 4, legH: 6, lx: 3, lz: 5, legT: T.pig_leg, body: [10, 8, 16], bodyT: T.pig_body,
       head: [8, 8, 8], headT: faced(T.pig_body, T.pig_face), headZ: -11, headY: 12 }) },
-    cow: { scale: 1 / 16, parts: quadruped({ leg: 4, legH: 12, lx: 4, lz: 6, legT: T.cow_leg, body: [12, 10, 18], bodyT: T.cow_body,
-      head: [8, 8, 6], headT: faced(T.cow_body, T.cow_face), headZ: -11.5, headY: 20 }) },
-    sheep: { scale: 1 / 16, parts: quadruped({ leg: 4, legH: 12, lx: 3, lz: 5, legT: T.sheep_leg, body: [12, 10, 16], bodyT: T.sheep_wool,
-      head: [6, 6, 8], headT: faced(T.sheep_leg, T.sheep_face, T.sheep_wool), headZ: -10.5, headY: 19 }) },
-    chicken: { scale: 1 / 16, parts: [
-      { c: [-1.5, 2.5, 0], s: [2, 5, 2], t: all(T.chicken_leg), pivot: [-1.5, 5, 0], swing: 1 },
-      { c: [1.5, 2.5, 0], s: [2, 5, 2], t: all(T.chicken_leg), pivot: [1.5, 5, 0], swing: -1 },
-      { c: [0, 8, 0], s: [6, 6, 8], t: all(T.chicken_body) },
-      { c: [0, 13, -4.5], s: [4, 6, 3], t: faced(T.chicken_body, T.chicken_face), pivot: [0, 10, -3], head: true },
+    // Корова: широкое длинное тело, морда с носом, рога, вымя
+    cow: { scale: 1 / 16, parts: [
+      ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => ({ c: [sx * 4, 6, sz * 7], s: [4, 12, 4], t: all(T.cow_leg), pivot: [sx * 4, 12, sz * 7], swing: sx * sz })),
+      { c: [0, 17, 0], s: [12, 10, 18], t: all(T.cow_body) },
+      { c: [0, 11.5, 4], s: [4, 1, 6], t: all(T.pig_body) },
+      { c: [0, 20, -12], s: [8, 8, 6], t: faced(T.cow_body, T.cow_face), pivot: [0, 20, -9], head: true },
+      { c: [0, 17.5, -15.5], s: [4, 3, 1], t: all(T.cow_nose), pivot: [0, 20, -9], head: true },
+      { c: [-4.5, 25, -13], s: [1, 3, 1], t: all(T.cow_horn), pivot: [0, 20, -9], head: true },
+      { c: [4.5, 25, -13], s: [1, 3, 1], t: all(T.cow_horn), pivot: [0, 20, -9], head: true },
     ] },
-    // Камера на треноге: пока ничего не делает (как в оригинальной версии)
-    camera: { scale: 1 / 16, parts: [
-      { c: [-2.5, 6, 1.5], s: [1, 12, 1], t: all(T.planks) },
-      { c: [2.5, 6, 1.5], s: [1, 12, 1], t: all(T.planks) },
-      { c: [0, 6, -2.5], s: [1, 12, 1], t: all(T.planks) },
-      { c: [0, 15, 0], s: [8, 6, 5], t: all(T.wool_black), head: true, pivot: [0, 13, 0] },
-      { c: [0, 15, -3], s: [3, 3, 2], t: all(T.wool_light_blue), head: true, pivot: [0, 13, 0] },
+    // Овца: пушистое тело, короткие ножки, голова с шерстяной шапкой
+    sheep: { scale: 1 / 16, parts: [
+      ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => ({ c: [sx * 3, 3, sz * 5], s: [4, 6, 4], t: all(T.sheep_leg), pivot: [sx * 3, 6, sz * 5], swing: sx * sz })),
+      { c: [0, 10.5, 0], s: [10, 9, 15], t: all(T.sheep_wool) },
+      { c: [0, 13, -10.5], s: [6, 6, 8], t: faced(T.sheep_skin, T.sheep_face, T.sheep_skin), pivot: [0, 13, -7], head: true },
+      { c: [0, 16.5, -9.5], s: [7, 2, 6], t: all(T.sheep_wool), pivot: [0, 13, -7], head: true },
+    ] },
+    sheep_shorn: { scale: 1 / 16, parts: [
+      ...[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz]) => ({ c: [sx * 3, 3, sz * 5], s: [4, 6, 4], t: all(T.sheep_leg), pivot: [sx * 3, 6, sz * 5], swing: sx * sz })),
+      { c: [0, 9.5, 0], s: [8, 7, 14], t: all(T.sheep_skin) },
+      { c: [0, 13, -10.5], s: [6, 6, 8], t: faced(T.sheep_skin, T.sheep_face, T.sheep_skin), pivot: [0, 13, -7], head: true },
+    ] },
+    // Курица: клюв и красная бородка объёмные, крылья по бокам
+    chicken: { scale: 1 / 16, parts: [
+      { c: [-1.5, 2.5, 0.5], s: [1.5, 5, 1.5], t: all(T.chicken_leg), pivot: [-1.5, 5, 0.5], swing: 1 },
+      { c: [1.5, 2.5, 0.5], s: [1.5, 5, 1.5], t: all(T.chicken_leg), pivot: [1.5, 5, 0.5], swing: -1 },
+      { c: [0, 8, 0], s: [6, 6, 8], t: all(T.chicken_body) },
+      { c: [-3.5, 9, 0], s: [1, 4, 6], t: all(T.chicken_body), pivot: [-3.5, 11, 0], swing: 0.5 },
+      { c: [3.5, 9, 0], s: [1, 4, 6], t: all(T.chicken_body), pivot: [3.5, 11, 0], swing: -0.5 },
+      { c: [0, 13, -4.5], s: [4, 6, 3], t: faced(T.chicken_body, T.chicken_face), pivot: [0, 10, -3], head: true },
+      { c: [0, 13, -7], s: [4, 2, 2], t: all(T.chicken_beak), pivot: [0, 10, -3], head: true },
+      { c: [0, 11, -6.5], s: [2, 2, 2], t: all(T.chicken_wattle), pivot: [0, 10, -3], head: true },
     ] },
     // Враждебные мобы (свой рисунок). pose — постоянный наклон детали вперёд, roll — наклон вбок (ноги паука)
     zombie: { scale: 1.9 / 32, parts: [
@@ -114,6 +129,19 @@
     }
   }
 
+  // Предмет в руке моба (лук скелета): плоская объёмная картинка в точке c (пиксели модели), size — размер в пикселях
+  function heldSprite(out, tile, m, c, size, rotZ) {
+    const sc = MODELS[m.type].scale, cy = Math.cos(m.yaw), sy = Math.sin(m.yaw), cr = Math.cos(rotZ), sr = Math.sin(rotZ);
+    const v = Geo.spriteVerts(tile, (p) => {
+      let qx = (p[0] - 0.5) * size, qy = (p[1] - 0.5) * size;
+      const qz = (p[2] - 0.5) * size;
+      const rx = qx * cr - qy * sr; qy = qx * sr + qy * cr; qx = rx;
+      const X = (c[0] + qz) * sc, Y = (c[1] + qy) * sc, Z = (c[2] + qx) * sc; // плоскость лука — вдоль взгляда моба
+      return [m.pos[0] + X * cy + Z * sy, m.pos[1] + Y, m.pos[2] - X * sy + Z * cy];
+    }, 1);
+    for (let k = 0; k < v.length; k++) out.push(v[k]);
+  }
+
   // ---------- Выпавший предмет ----------
   class ItemDrop extends CM.Body {
     constructor(id, count, dur, pos, vel, delay) {
@@ -129,9 +157,8 @@
   const MOB = {
     pig: { hw: 0.4, h: 0.9, hp: 10, speed: 1.1, drops: [[I.PORK_RAW, 1, 2]] },
     cow: { hw: 0.45, h: 1.35, hp: 10, speed: 0.9, drops: [[I.BEEF_RAW, 1, 2]] },
-    sheep: { hw: 0.45, h: 1.3, hp: 8, speed: 1.0, drops: [[I.MUTTON_RAW, 1, 1], [B.WOOL, 1, 1]] },
-    chicken: { hw: 0.2, h: 0.7, hp: 4, speed: 0.8, drops: [[I.CHICKEN_RAW, 1, 1]] },
-    camera: { hw: 0.3, h: 1.1, hp: 1, speed: 0, drops: [[I.CAMERA, 1, 1]], still: true },
+    sheep: { hw: 0.45, h: 1.1, hp: 8, speed: 1.0, drops: [[I.MUTTON_RAW, 1, 1], [B.WOOL, 1, 1]] },
+    chicken: { hw: 0.2, h: 0.7, hp: 4, speed: 0.8, drops: [[I.CHICKEN_RAW, 1, 1], [I.FEATHER, 0, 2]] },
     // Враждебные: нападают ночью и в темноте пещер (паук днём мирный, пока его не ударят)
     zombie: { hw: 0.3, h: 1.9, hp: 20, speed: 1.1, hostile: true, dmg: 3, burns: true, drops: [[I.ROTTEN_FLESH, 0, 2]] },
     skeleton: { hw: 0.3, h: 1.9, hp: 20, speed: 1.2, hostile: true, ranged: true, burns: true, drops: [[I.BONE, 0, 2], [I.ARROW, 0, 2]] },
@@ -300,7 +327,7 @@
       if (i < 0) return;
       this.mobs.splice(i, 1);
       if (m.exploded) return;
-      for (const [id, a, b] of m.def.drops) this.drop(id, a + Math.floor(Math.random() * (b - a + 1)), undefined, [m.pos[0], m.pos[1] + 0.4, m.pos[2]]);
+      for (const [id, a, b] of m.def.drops) if (!(m.sheared && id === B.WOOL)) this.drop(id, a + Math.floor(Math.random() * (b - a + 1)), undefined, [m.pos[0], m.pos[1] + 0.4, m.pos[2]]);
     }
 
     spawnMob(type, pos) { const m = new Mob(type, pos); this.mobs.push(m); return m; }
@@ -329,8 +356,14 @@
       this.mobs.push(new Mob(type, [x + 0.5, y + 0.01, z + 0.5]));
     }
 
+    // Стрела игрока из лука: o — откуда, d — направление; pickup — можно подобрать
+    shootFrom(o, d, speed, player, creative) {
+      (this.arrows || (this.arrows = [])).push({ pos: [o[0] + d[0] * 0.6, o[1] + d[1] * 0.6 - 0.1, o[2] + d[2] * 0.6], vel: d.map((v) => v * speed), age: 0, stuck: false, player: true, pickup: !creative });
+    }
+
     // Стрела скелета: летит по дуге в игрока
     shoot(m, target) {
+      if (this.sound) this.sound('bow', m.pos);
       const o = [m.pos[0], m.pos[1] + 1.5, m.pos[2]];
       const t = [target.pos[0], target.pos[1] + 1.1, target.pos[2]];
       const dx = t[0] - o[0], dz = t[2] - o[2], dist = Math.hypot(dx, dz), sp = 16, time = dist / sp;
@@ -361,6 +394,7 @@
     // ctx: {player, R, onPickup(id, count, dur) -> остаток}
     update(dt, ctx) {
       const w = this.world, pl = ctx.player;
+      this.sound = ctx.sound;
       // Выпавшие предметы
       for (let i = this.items.length - 1; i >= 0; i--) {
         const it = this.items[i];
@@ -388,8 +422,14 @@
         const dx = m.pos[0] - pl.pos[0], dz = m.pos[2] - pl.pos[2];
         if ((dx * dx + dz * dz > far * far && !m.def.still) || m.pos[1] < -10) { this.mobs.splice(i, 1); continue; }
         if (m.def.hostile && dx * dx + dz * dz > 72 * 72) { this.mobs.splice(i, 1); continue; }
+        const fuse0 = m.fuse || 0;
         if (w.isLoadedAt(m.pos[0], m.pos[2])) m.ai(dt, w, ctx);
-        if (m.health <= 0) this.kill(m);
+        if (m.health <= 0) { this.kill(m); continue; }
+        if (!fuse0 && m.fuse > 0 && ctx.sound) ctx.sound('fuse', m.pos);
+        if (m.sheared && (m.regrow -= dt) <= 0) m.sheared = false; // шерсть отрастает
+        // голоса мобов время от времени
+        m.say = (m.say === undefined ? 3 + Math.random() * 12 : m.say) - dt;
+        if (m.say <= 0) { m.say = 6 + Math.random() * 14; if (ctx.sound && dx * dx + dz * dz < 20 * 20) ctx.sound('mob_' + m.type, m.pos); }
       }
       // Враждебные мобы появляются только в выживании
       if (ctx.hostile) {
@@ -403,11 +443,28 @@
       for (let i = (this.arrows || []).length - 1; i >= 0; i--) {
         const ar = this.arrows[i];
         ar.age += dt;
-        if (ar.age > (ar.stuck ? 6 : 8)) { this.arrows.splice(i, 1); continue; }
-        if (ar.stuck) continue;
+        if (ar.age > (ar.stuck ? (ar.pickup ? 60 : 6) : 8)) { this.arrows.splice(i, 1); continue; }
+        if (ar.stuck) {
+          // свою стрелу можно подобрать
+          if (ar.pickup && Math.hypot(ar.pos[0] - pl.pos[0], ar.pos[1] - pl.pos[1] - 0.5, ar.pos[2] - pl.pos[2]) < 1.3 && ctx.onPickup(I.ARROW, 1) <= 0) this.arrows.splice(i, 1);
+          continue;
+        }
         ar.vel[1] -= 20 * dt;
         for (let a = 0; a < 3; a++) ar.pos[a] += ar.vel[a] * dt;
-        if (CM.SOLID[w.getBlock(Math.floor(ar.pos[0]), Math.floor(ar.pos[1]), Math.floor(ar.pos[2]))]) { ar.stuck = true; ar.age = 0; continue; }
+        if (CM.SOLID[w.getBlock(Math.floor(ar.pos[0]), Math.floor(ar.pos[1]), Math.floor(ar.pos[2]))]) {
+          ar.stuck = true; ar.age = 0;
+          if (ctx.sound) ctx.sound('arrow_hit', ar.pos);
+          continue;
+        }
+        if (ar.player) {
+          const hitM = this.mobs.find((m) => Math.abs(ar.pos[0] - m.pos[0]) < m.hw + 0.15 && Math.abs(ar.pos[2] - m.pos[2]) < m.hw + 0.15 && ar.pos[1] > m.pos[1] && ar.pos[1] < m.pos[1] + m.h + 0.1);
+          if (hitM) {
+            this.hitMob(hitM, 6, [ar.pos[0] - ar.vel[0], ar.pos[1], ar.pos[2] - ar.vel[2]]);
+            if (ctx.sound) ctx.sound('hit', ar.pos);
+            this.arrows.splice(i, 1);
+          }
+          continue;
+        }
         const px = ar.pos[0] - pl.pos[0], pz = ar.pos[2] - pl.pos[2], py = ar.pos[1] - pl.pos[1];
         if (Math.abs(px) < 0.45 && Math.abs(pz) < 0.45 && py > 0 && py < 1.9) {
           ctx.hurtPlayer(3, [ar.pos[0] - ar.vel[0], ar.pos[1], ar.pos[2] - ar.vel[2]]);
@@ -428,7 +485,9 @@
         const swing = Math.sin(m.walk) * 0.7 * Math.min(1, Math.hypot(m.vel[0], m.vel[2]) * 1.5);
         const fuse = m.fuse || 0, blink = fuse > 0 && Math.floor(fuse * 8) % 2 === 0;
         const list = m.hurtTime > 0 ? hurt : blink ? flash : normal;
-        buildModel(list, m.type, m.pos[0], m.pos[1], m.pos[2], m.yaw, { swing, headPitch: m.headPitch, scale: 1 + fuse * 0.12 }, 1);
+        const model = m.type === 'sheep' && m.sheared ? 'sheep_shorn' : m.type;
+        buildModel(list, model, m.pos[0], m.pos[1], m.pos[2], m.yaw, { swing, headPitch: m.headPitch, scale: 1 + fuse * 0.12 }, 1);
+        if (m.type === 'skeleton') heldSprite(list, T.bow, m, [5, 22, -13], 13, -Math.PI / 4);
       }
       // стрелы: тонкая палочка вдоль скорости
       for (const ar of this.arrows || []) {
@@ -463,7 +522,6 @@
   }
 
   CM.Models = { build: buildModel };
-  Entities.prototype.spawnCamera = function (pos, yaw) { const m = new Mob('camera', pos); m.yaw = yaw; this.mobs.push(m); };
   CM.Entities = Entities;
   CM.Mob = Mob;
 })(window.CM);

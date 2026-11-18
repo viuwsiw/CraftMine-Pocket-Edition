@@ -18,7 +18,7 @@
     <div class="logo-wrap">
       <h1 class="logo">CraftMine</h1>
       <div class="subtitle">Pocket Edition</div>
-      <div class="version-top">v0.1.0 alpha build 4</div>
+      <div class="version-top">v0.1.0 alpha build 5</div>
     </div>
     <div class="tiles">
       <button class="tile" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""></button>
@@ -102,6 +102,10 @@
       <div class="field">
         <span>Чувствительность камеры, %</span>
         <div class="stepper"><button class="btn sbtn" data-step="sensitivity:-10">−</button><b class="sval val-sens"></b><button class="btn sbtn" data-step="sensitivity:10">+</button></div>
+      </div>
+      <div class="field">
+        <span>Громкость звука, %</span>
+        <div class="stepper"><button class="btn sbtn" data-step="volume:-10">−</button><b class="sval" id="val-vol"></b><button class="btn sbtn" data-step="volume:10">+</button></div>
       </div>
       <div class="field">
         <span>Управление: размер крестовины, %</span>
@@ -228,6 +232,7 @@
   <script src="js/entities.js"></script>
   <script src="js/texture_pack.js"></script>
   <script src="js/texpacks.js"></script>
+  <script src="js/sound.js"></script>
   <script src="js/controls.js"></script>
   <script src="js/main.js"></script>
 </body>

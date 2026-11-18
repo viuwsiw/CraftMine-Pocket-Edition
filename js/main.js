@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 4';
+  const VERSION = '0.1.0 alpha build 5';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -21,6 +21,7 @@
     renderDistance: isTouch ? 4 : 6,
     sensitivity: 100,
     dpadScale: 100,       // размер крестовины, %
+    volume: 80,           // громкость звука, %
     autoJump: true,
     fallDamage: true,
     showCoords: false,
@@ -76,6 +77,10 @@
   $('gl').addEventListener('webglcontextrestored', () => location.reload());
 
   const controls = new CM.Controls($('dpad'), $('look-zone'));
+  const Snd = CM.Sound;
+  Snd.setVolume((settings.volume === undefined ? 80 : settings.volume) / 100);
+  // щелчок кнопок интерфейса
+  document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('button')) Snd.play('click'); }, true);
 
   // ---------- Свои текстуры ----------
   function refreshTextures() {
@@ -599,6 +604,7 @@
     $('set-nick').value = nick();
     $('val-rd').textContent = settings.renderDistance;
     $('val-dpad').textContent = settings.dpadScale;
+    $('val-vol').textContent = settings.volume;
     document.querySelectorAll('.val-sens').forEach((el) => { el.textContent = settings.sensitivity; });
     $('set-autojump').checked = settings.autoJump;
     $('set-falldmg').checked = settings.fallDamage;
@@ -608,13 +614,14 @@
   }
   function openSettings() { syncSettingsUI(); show('screen-settings'); }
   // Числовые настройки — только кнопками «−» и «+» (без ползунков: меньше случайных нажатий), сохраняются сразу
-  const LIMITS = { renderDistance: [2, 8], sensitivity: [10, 400], dpadScale: [60, 200] };
+  const LIMITS = { renderDistance: [2, 8], sensitivity: [10, 400], dpadScale: [60, 200], volume: [0, 100] };
   document.querySelectorAll('[data-step]').forEach((b) => b.addEventListener('click', (e) => {
     e.preventDefault();
     const [key, d] = b.dataset.step.split(':'), [lo, hi] = LIMITS[key];
     settings[key] = Math.max(lo, Math.min(hi, (+settings[key] || 0) + +d));
     store.set('settings', settings);
     if (key === 'dpadScale') applyDpad();
+    if (key === 'volume') Snd.setVolume(settings.volume / 100);
     syncSettingsUI();
   }));
   function applyDpad() {
@@ -769,6 +776,7 @@
       const h = $('hurt');
       h.classList.add('on');
       setTimeout(() => h.classList.remove('on'), 120);
+      Snd.play('hurt');
       if (navigator.vibrate) try { navigator.vibrate(60); } catch (_) { /* ignore */ }
     };
     breaking = null;
@@ -830,6 +838,7 @@
   let breaking = null;      // {x,y,z,progress}
   let swing = 0;            // анимация взмаха рукой, 0..1
   let breakCooldown = 0;
+  let bowCd = 0;            // перезарядка лука
   let thirdPerson = false, viewMode = 0;
   let ents = null;
   let time = 0.05;          // время суток 0..1: 0 — рассвет, 0.25 — полдень, 0.5 — закат, 0.75 — полночь
@@ -895,9 +904,35 @@
     const { o, d, reach, hit } = castRay(cam, sx, sy);
     const mh = ents.rayMob(o, d, reach);
     const slot = inv.slots[selected], held = slot ? slot.id : 0;
+    // Лук: выстрел в сторону касания (в выживании нужна стрела)
+    if (held === CM.I.BOW) {
+      if (bowCd > 0) return;
+      if (!creative) {
+        if (inv.count(CM.I.ARROW) <= 0) { toast('Нет стрел'); return; }
+        inv.remove(CM.I.ARROW, 1);
+        renderHotbar();
+      }
+      ents.shootFrom(o, d, 30, true, creative);
+      bowCd = 0.55; swing = 0.6;
+      Snd.play('bow');
+      wearTool();
+      return;
+    }
     if (mh && (!hit || mh.t < hit.t)) {
       const t = Items.tool(held);
+      // ножницы: подстричь овцу
+      if (held === CM.I.SHEARS && mh.mob.type === 'sheep') {
+        if (!mh.mob.sheared) {
+          mh.mob.sheared = true; mh.mob.regrow = 40 + Math.random() * 60;
+          ents.drop(Bk.WOOL, 1 + Math.floor(Math.random() * 3), undefined, [mh.mob.pos[0], mh.mob.pos[1] + 1, mh.mob.pos[2]]);
+          Snd.play('shear', mh.mob.pos);
+          swing = 1; wearTool();
+        }
+        return;
+      }
       ents.hitMob(mh.mob, t ? t.dmg : 1, player.pos);
+      Snd.play('hit', mh.mob.pos);
+      Snd.play('mob_' + mh.mob.type, mh.mob.pos);
       player.exhaustion += 0.2;
       swing = 1;
       wearTool();
@@ -905,7 +940,7 @@
     }
     if (hit) {
       const hb = BL[hit.id];
-      if ((hb.kind === 'door' && !hb.iron) || hb.kind === 'trapdoor') { toggleOpen(hit.x, hit.y, hit.z, hit.id); swing = 1; return; }
+      if ((hb.kind === 'door' && !hb.iron) || hb.kind === 'trapdoor') { toggleOpen(hit.x, hit.y, hit.z, hit.id); Snd.play('door', [hit.x, hit.y, hit.z]); swing = 1; return; }
       if (hb.kind === 'tnt' && !(held && Items.isBlock(held))) { ignite(hit.x, hit.y, hit.z, 4); swing = 1; return; }
       if (hb.kind === 'crafting') { openInventory('table'); return; }
       if (hb.kind === 'chest') { openInventory('chest', world.tile(hit.x, hit.y, hit.z, () => ({ type: 'chest', slots: new Array(27).fill(null) }))); return; }
@@ -915,6 +950,7 @@
     const heal = Items.food(held);
     if (heal) {
       if (creative || !player.eat(heal)) return;
+      Snd.play('eat');
       inv.takeOne(selected);
       swing = 1;
       selectSlot(selected);
@@ -930,11 +966,16 @@
       swing = 1;
       return;
     }
-    // Камера: ставится на верх блока и стоит на треноге
-    if (held === CM.I.CAMERA && hit && hit.n[1] === 1) {
-      ents.spawnCamera([hit.x + 0.5, hit.y + 1.01, hit.z + 0.5], player.yaw);
-      if (!creative) { inv.takeOne(selected); selectSlot(selected); }
-      swing = 1;
+    // Огниво: поджечь динамит или поставить огонь рядом с блоком
+    if (held === CM.I.FLINT_STEEL && hit) {
+      if (hit.id === Bk.TNT) ignite(hit.x, hit.y, hit.z, 4);
+      else {
+        const fx = hit.x + hit.n[0], fy = hit.y + hit.n[1], fz = hit.z + hit.n[2];
+        if (world.getBlock(fx, fy, fz) !== Bk.AIR) return;
+        world.setBlock(fx, fy, fz, Bk.FIRE);
+      }
+      Snd.play('ignite', [hit.x + 0.5, hit.y + 0.5, hit.z + 0.5]);
+      swing = 1; wearTool();
       return;
     }
     if (!hit || !held || !Items.isBlock(held) || (!hit.n[0] && !hit.n[1] && !hit.n[2])) return;
@@ -988,6 +1029,7 @@
     else ok = world.setBlock(x, y, z, held);
     if (ok) {
       swing = 1;
+      Snd.play('place', [x + 0.5, y + 0.5, z + 0.5], Snd.matOf(held));
       if (!creative) { inv.takeOne(selected); selectSlot(selected); }
     }
   }
@@ -1008,8 +1050,9 @@
     $('sleep').classList.add('on');
   }
 
-  function breakBlock(hit, drops) {
+  function breakBlock(hit, drops, itemOverride) {
     const b = BL[hit.id];
+    Snd.play('break', [hit.x + 0.5, hit.y + 0.5, hit.z + 0.5], Snd.matOf(hit.id));
     // лёд тает в воду, если под ним не пусто
     const under = world.getBlock(hit.x, hit.y - 1, hit.z);
     world.setBlock(hit.x, hit.y, hit.z, hit.id === Bk.ICE && under !== Bk.AIR && !creative ? Bk.WATER : Bk.AIR);
@@ -1019,7 +1062,9 @@
     const tile = world.removeTile(hit.x, hit.y, hit.z);
     if (!creative) {
       if (tile) for (const s of tile.slots) if (s) ents.drop(s.id, s.count, s.dur, c);
-      if (drops && b.item) ents.drop(b.item, b.drops || 1, undefined, c, [(Math.random() - 0.5) * 1.5, 2.5, (Math.random() - 0.5) * 1.5], 0.3);
+      let item = itemOverride || b.item;
+      if (hit.id === Bk.GRAVEL && Math.random() < 0.1) item = CM.I.FLINT; // из гравия иногда выпадает кремень
+      if (drops && item) ents.drop(item, b.drops || 1, undefined, c, [(Math.random() - 0.5) * 1.5, 2.5, (Math.random() - 0.5) * 1.5], 0.3);
     }
     dropUnsupported(hit.x, hit.y, hit.z);
   }
@@ -1038,6 +1083,24 @@
       const id = world.getBlock(x - d[0], y, z - d[1]), nb = BL[id];
       if (nb && (nb.wall || nb.kind === 'ladder') && nb.facing === f) pop(x - d[0], y, z - d[1]);
     });
+  }
+
+  // Анимация воды и лавы: текстура медленно «течёт» (сдвиг на пиксель с переливом)
+  let liqT = 0, lavaT = 0;
+  function animateLiquids(dt) {
+    liqT += dt; lavaT += dt;
+    const TS = CM.Textures.tile, per = CM.Textures.perRow, ctx = CM.Textures.ctx;
+    const shift = (tile, dx, dy) => {
+      const x = (tile % per) * TS, y = Math.floor(tile / per) * TS;
+      const img = ctx.getImageData(x, y, TS, TS);
+      ctx.putImageData(img, x + dx, y + dy, -dx, -dy, TS, TS);
+      // перенос края на другую сторону
+      if (dy) ctx.putImageData(img, x, y + dy - Math.sign(dy) * TS, 0, dy > 0 ? TS - dy : 0, TS, Math.abs(dy));
+      if (dx) ctx.putImageData(img, x + dx - Math.sign(dx) * TS, y, dx > 0 ? TS - dx : 0, 0, Math.abs(dx), TS);
+      renderer.updateTile(tile);
+    };
+    if (liqT > 0.09) { liqT = 0; shift(CM.TILES.water, 0, 1); }
+    if (lavaT > 0.2) { lavaT = 0; shift(CM.TILES.lava, 0, 1); }
   }
 
   // Моб ударил игрока: урон и отбрасывание
@@ -1080,6 +1143,7 @@
       if (!creative && b.item && Math.random() < 0.3) ents.drop(b.item, 1, undefined, [x + 0.5, y + 0.5, z + 0.5]);
     }
     const c = [cx + 0.5, cy + 0.5, cz + 0.5];
+    Snd.play('explode', c);
     const pd = Math.hypot(player.pos[0] - c[0], player.pos[1] + 0.9 - c[1], player.pos[2] - c[2]);
     if (pd < 7) {
       player.hurt(Math.floor((7 - pd) * 3));
@@ -1111,7 +1175,9 @@
         if (isFinite(m.time)) {
           breaking.progress += dt / m.time;
           extras.crack = { x: hit.x, y: hit.y, z: hit.z, bounds: hit.bounds, stage: Math.min(3, Math.floor(breaking.progress * 4)) };
-          if (breaking.progress >= 1) { breakBlock(hit, m.drops); wearTool(); player.exhaustion += 0.03; breaking = null; extras.crack = null; }
+          breaking.snd = (breaking.snd || 0) - dt;
+          if (breaking.snd <= 0) { breaking.snd = 0.27; Snd.play('dig', [hit.x + 0.5, hit.y + 0.5, hit.z + 0.5], Snd.matOf(hit.id)); }
+          if (breaking.progress >= 1) { breakBlock(hit, m.drops, m.item); wearTool(); player.exhaustion += 0.03; breaking = null; extras.crack = null; }
         }
       }
       if (swing <= 0) swing = 1;
@@ -1143,7 +1209,7 @@
 
   function onPickup(id, count, dur) {
     const left = inv.add(id, count, dur);
-    if (left < count) renderHotbar();
+    if (left < count) { renderHotbar(); Snd.play('pop'); }
     return left;
   }
 
@@ -1417,7 +1483,14 @@
       if (controls.consumeDoubleJump()) player.toggleFly();
       if (world.isLoadedAt(player.pos[0], player.pos[2])) {
         const hpBefore = player.health;
+        const bob0 = player.bob, wet0 = player.inWater;
         player.update(dt, controls.state(), world, { autoJump: settings.autoJump });
+        // шаги: звук на каждом шаге по материалу под ногами; всплеск при входе в воду
+        if (player.onGround && Math.floor(player.bob / Math.PI) !== Math.floor(bob0 / Math.PI)) {
+          const under = world.getBlock(Math.floor(player.pos[0]), Math.floor(player.pos[1] - 0.2), Math.floor(player.pos[2]));
+          if (under) Snd.play('step', null, Snd.matOf(under));
+        }
+        if (player.inWater && !wet0 && player.vel[1] < -3) Snd.play('splash');
         if (!settings.fallDamage && player.health < hpBefore) player.health = hpBefore;
       }
       renderHearts(player.health);
@@ -1455,7 +1528,7 @@
     if (state === 'game' || state === 'inventory') {
       ents.update(dt, { player, R, onPickup, spawn: !net.client, hostile: !creative && !net.client, creative, night: mobNight(),
         hurtPlayer, explode: (m) => explode(Math.floor(m.pos[0]), Math.floor(m.pos[1] + 0.5), Math.floor(m.pos[2]), 3),
-        shoot: (m, t) => ents.shoot(m, t) });
+        shoot: (m, t) => ents.shoot(m, t), sound: Snd.play });
       tickFurnaces(dt);
       tickFuses(dt);
       world.tick(dt);
@@ -1466,8 +1539,11 @@
     world.update(player.pos[0], player.pos[2], R, 2, 2);
     const cam = viewCam();
     updateLabels(cam);
+    Snd.setListener(player.pos[0], player.pos[1] + 1.6, player.pos[2], player.yaw);
     const extras = interact(dt, cam, now);
+    animateLiquids(dt);
     swing = Math.max(0, swing - dt * 3.5);
+    bowCd = Math.max(0, bowCd - dt);
     const sky = dayLight();
     extras.light = sky.light; extras.sky = sky.sky; extras.sunAngle = sky.sunAngle;
 

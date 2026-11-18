@@ -1,0 +1,53 @@
+# CraftMine PE для iOS. Проект Xcode собирается из этого файла программой XcodeGen (см. ios/build.sh).
+name: CraftMinePE
+options:
+  bundleIdPrefix: com.craftmine
+  deploymentTarget:
+    iOS: "14.0"
+  createIntermediateGroups: true
+targets:
+  CraftMinePE:
+    type: application
+    platform: iOS
+    sources:
+      - path: CraftMine
+        excludes:
+          - "www/**"
+      # сама игра (index.html, css, js, fonts) — папкой, как есть
+      - path: CraftMine/www
+        type: folder
+        buildPhase: resources
+    info:
+      path: CraftMine/Info.plist
+      properties:
+        CFBundleDisplayName: CraftMine PE
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "5"
+        UILaunchScreen: {}
+        UIRequiresFullScreen: true
+        UIStatusBarHidden: true
+        UIViewControllerBasedStatusBarAppearance: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSLocalNetworkUsageDescription: "Игра по Wi-Fi: найти миры друзей в этой сети и открыть свой."
+        NSBonjourServices:
+          - _craftmine._tcp
+        NSPhotoLibraryUsageDescription: "Выбор своих текстур (PNG) для блоков и предметов."
+        NSCameraUsageDescription: "Можно сфотографировать картинку для своей текстуры."
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.craftmine.pe
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "5"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""

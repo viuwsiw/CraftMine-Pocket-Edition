@@ -160,12 +160,15 @@
 | Алмазный топор | [`items/diamond_axe.png`](items/diamond_axe.png) | 32×32 |
 | Алмазная лопата | [`items/diamond_shovel.png`](items/diamond_shovel.png) | 32×32 |
 | Алмазный меч | [`items/diamond_sword.png`](items/diamond_sword.png) | 32×32 |
-| Камера | [`items/camera.png`](items/camera.png) | 32×32 |
 | Гнилая плоть | [`items/rotten_flesh.png`](items/rotten_flesh.png) | 32×32 |
 | Порох | [`items/gunpowder.png`](items/gunpowder.png) | 32×32 |
 | Нить | [`items/string.png`](items/string.png) | 32×32 |
 | Кость | [`items/bone.png`](items/bone.png) | 32×32 |
 | Стрела | [`items/arrow.png`](items/arrow.png) | 32×32 |
+| Лук | [`items/bow.png`](items/bow.png) | 32×32 |
+| Кремень | [`items/flint.png`](items/flint.png) | 32×32 |
+| Огниво | [`items/flint_and_steel.png`](items/flint_and_steel.png) | 32×32 |
+| Ножницы | [`items/shears.png`](items/shears.png) | 32×32 |
 | Яйцо призыва свиньи | [`items/egg_pig.png`](items/egg_pig.png) | 32×32 |
 | Яйцо призыва коровы | [`items/egg_cow.png`](items/egg_cow.png) | 32×32 |
 | Яйцо призыва овцы | [`items/egg_sheep.png`](items/egg_sheep.png) | 32×32 |
@@ -174,3 +177,4 @@
 | Яйцо призыва скелета | [`items/egg_skeleton.png`](items/egg_skeleton.png) | 32×32 |
 | Яйцо призыва крипера | [`items/egg_creeper.png`](items/egg_creeper.png) | 32×32 |
 | Яйцо призыва паука | [`items/egg_spider.png`](items/egg_spider.png) | 32×32 |
+| Перо | [`items/feather.png`](items/feather.png) | 32×32 |

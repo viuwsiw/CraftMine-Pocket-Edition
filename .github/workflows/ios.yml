@@ -1,0 +1,25 @@
+# Сборка iOS-версии на macOS в GitHub Actions. Готовый .ipa — в артефактах запуска (Actions → запуск → Artifacts).
+name: iOS build
+on:
+  push:
+    paths:
+      - 'ios/**'
+      - 'js/**'
+      - 'css/**'
+      - 'index.html'
+      - 'textures/**'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+jobs:
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: XcodeGen
+        run: brew install xcodegen
+      - name: Build
+        run: ./ios/build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CraftMine-PE-iOS
+          path: dist/*.ipa

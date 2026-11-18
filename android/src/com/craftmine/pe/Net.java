@@ -1,6 +1,8 @@
 package com.craftmine.pe;
 
 import android.content.Context;
+import android.net.nsd.NsdManager;
+import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 import android.webkit.JavascriptInterface;
 
@@ -54,7 +56,91 @@ public class Net {
     // Поиск игр
     private volatile DatagramSocket discSock;
 
-    Net(Context ctx) { this.ctx = ctx.getApplicationContext(); }
+    // Bonjour (NSD): так игры видят друг друга Android и iPhone (iOS не умеет широковещательный UDP)
+    static final String SERVICE = "_craftmine._tcp.";
+    private NsdManager nsd;
+    private NsdManager.RegistrationListener regListener;
+    private NsdManager.DiscoveryListener discListener;
+    private final java.util.LinkedList<NsdServiceInfo> resolveQueue = new java.util.LinkedList<NsdServiceInfo>();
+    private boolean resolving;
+
+    Net(Context ctx) {
+        this.ctx = ctx.getApplicationContext();
+        try { nsd = (NsdManager) this.ctx.getSystemService(Context.NSD_SERVICE); } catch (Exception ignored) { }
+    }
+
+    private void nsdRegister(String name, String world) {
+        if (nsd == null) return;
+        try {
+            NsdServiceInfo info = new NsdServiceInfo();
+            String n = ("CraftMine " + name).replaceAll("[^\\p{L}\\p{N} _-]", "");
+            info.setServiceName(n.length() > 40 ? n.substring(0, 40) : n);
+            info.setServiceType(SERVICE);
+            info.setPort(TCP_PORT);
+            info.setAttribute("name", name);
+            info.setAttribute("world", world.length() > 60 ? world.substring(0, 60) : world);
+            regListener = new NsdManager.RegistrationListener() {
+                public void onServiceRegistered(NsdServiceInfo i) { }
+                public void onRegistrationFailed(NsdServiceInfo i, int e) { }
+                public void onServiceUnregistered(NsdServiceInfo i) { }
+                public void onUnregistrationFailed(NsdServiceInfo i, int e) { }
+            };
+            nsd.registerService(info, NsdManager.PROTOCOL_DNS_SD, regListener);
+        } catch (Exception ignored) { regListener = null; }
+    }
+
+    private void nsdUnregister() {
+        if (nsd != null && regListener != null) try { nsd.unregisterService(regListener); } catch (Exception ignored) { }
+        regListener = null;
+    }
+
+    private void nsdDiscover(boolean on) {
+        if (nsd == null) return;
+        if (discListener != null) { try { nsd.stopServiceDiscovery(discListener); } catch (Exception ignored) { } discListener = null; }
+        if (!on) return;
+        discListener = new NsdManager.DiscoveryListener() {
+            public void onDiscoveryStarted(String t) { }
+            public void onDiscoveryStopped(String t) { }
+            public void onStartDiscoveryFailed(String t, int e) { }
+            public void onStopDiscoveryFailed(String t, int e) { }
+            public void onServiceLost(NsdServiceInfo i) { }
+            public void onServiceFound(NsdServiceInfo i) {
+                synchronized (resolveQueue) { resolveQueue.add(i); }
+                resolveNext();
+            }
+        };
+        try { nsd.discoverServices(SERVICE, NsdManager.PROTOCOL_DNS_SD, discListener); } catch (Exception ignored) { discListener = null; }
+    }
+
+    // Старые Android умеют разрешать только один сервис за раз — очередь
+    private void resolveNext() {
+        NsdServiceInfo next;
+        synchronized (resolveQueue) {
+            if (resolving || resolveQueue.isEmpty()) return;
+            next = resolveQueue.removeFirst();
+            resolving = true;
+        }
+        try {
+            nsd.resolveService(next, new NsdManager.ResolveListener() {
+                public void onResolveFailed(NsdServiceInfo i, int e) { done(); }
+                public void onServiceResolved(NsdServiceInfo i) {
+                    try {
+                        if (i.getHost() != null && !(i.getHost().getHostAddress().equals(localIp()) && server != null)) {
+                            Map<String, byte[]> a = i.getAttributes();
+                            JSONObject o = new JSONObject();
+                            o.put("e", "found");
+                            o.put("ip", i.getHost().getHostAddress());
+                            o.put("name", a.containsKey("name") ? new String(a.get("name"), "UTF-8") : i.getServiceName());
+                            o.put("world", a.containsKey("world") ? new String(a.get("world"), "UTF-8") : "");
+                            events.add(o.toString());
+                        }
+                    } catch (Exception ignored) { }
+                    done();
+                }
+                void done() { synchronized (resolveQueue) { resolving = false; } resolveNext(); }
+            });
+        } catch (Exception e) { synchronized (resolveQueue) { resolving = false; } }
+    }
 
     /** Одно соединение: отдельные потоки чтения и записи, чтобы JS никогда не ждал сеть. */
     private class Peer {
@@ -132,6 +218,7 @@ public class Net {
             JSONObject a = new JSONObject();
             a.put("cm", 1); a.put("name", name); a.put("world", world); a.put("port", TCP_PORT);
             announce = a.toString();
+            nsdRegister(name, world);
         } catch (Exception e) {
             event("error", "m", "Не удалось открыть мир: " + e.getMessage());
             return false;
@@ -175,6 +262,7 @@ public class Net {
     @JavascriptInterface
     public void stopHost() {
         announce = null;
+        nsdUnregister();
         ServerSocket ss = server;
         server = null;
         if (ss != null) try { ss.close(); } catch (Exception ignored) { }
@@ -193,6 +281,7 @@ public class Net {
         discSock = null;
         if (old != null) old.close();
         if (lock != null && lock.isHeld()) lock.release();
+        nsdDiscover(on);
         if (!on) return;
         try {
             WifiManager wm = (WifiManager) ctx.getSystemService(Context.WIFI_SERVICE);

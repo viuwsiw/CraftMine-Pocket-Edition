@@ -20,12 +20,17 @@
   item(I.MUTTON, 'Жареная баранина', 'mutton_cooked', { food: 6 });
   item(I.CHICKEN_RAW, 'Сырая курятина', 'chicken_raw', { food: 2 });
   item(I.CHICKEN, 'Жареная курятина', 'chicken_cooked', { food: 6 });
-  item(I.CAMERA, 'Камера', 'camera', { stack: 1 }); // ставится на землю и пока ничего не делает
   item(I.ROTTEN_FLESH, 'Гнилая плоть', 'rotten_flesh', { food: 4 });
   item(I.GUNPOWDER, 'Порох', 'gunpowder');
   item(I.STRING, 'Нить', 'string');
   item(I.BONE, 'Кость', 'bone');
   item(I.ARROW, 'Стрела', 'arrow');
+  item(I.FLINT, 'Кремень', 'flint');
+  item(I.FEATHER, 'Перо', 'feather');
+  // Лук: тап — выстрел стрелой; огниво: поджигает; ножницы: стригут овец и быстро режут листву и шерсть
+  item(I.BOW, 'Лук', 'bow', { stack: 1, fuel: 15, tool: { type: 'bow', tier: 0, speed: 1, dur: 384, dmg: 1 } });
+  item(I.FLINT_STEEL, 'Огниво', 'flint_and_steel', { stack: 1, tool: { type: 'flint', tier: 0, speed: 1, dur: 64, dmg: 1 } });
+  item(I.SHEARS, 'Ножницы', 'shears', { stack: 1, tool: { type: 'shears', tier: 0, speed: 5, dur: 238, dmg: 1 } });
   // Яйца призыва: тап по блоку — появляется моб
   const EGG_MOBS = ['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider'];
   const EGG_NAMES = ['свиньи', 'коровы', 'овцы', 'курицы', 'зомби', 'скелета', 'крипера', 'паука'];
@@ -95,7 +100,10 @@
     { out: [I.DIAMOND, 9], in: [[B.DIAMOND_BLOCK, 1]] },
     { out: [B.WOOL_C + 4, 1], in: [[B.WOOL, 1], [B.DANDELION, 1]] }, // жёлтая
     { out: [B.WOOL_C + 9, 1], in: [[B.WOOL, 1], [B.ROSE, 1]] },      // синяя (роза в этой версии синяя)
-    { out: [I.CAMERA, 1], in: [[I.IRON_INGOT, 3], [B.GLASS, 1]], table: true },
+    { out: [I.BOW, 1], in: [[I.STICK, 3], [I.STRING, 3]], table: true },
+    { out: [I.ARROW, 4], in: [[I.FLINT, 1], [I.STICK, 1], [I.FEATHER, 1]], table: true },
+    { out: [I.FLINT_STEEL, 1], in: [[I.IRON_INGOT, 1], [I.FLINT, 1]] },
+    { out: [I.SHEARS, 1], in: [[I.IRON_INGOT, 2]], table: true },
     { out: [B.TNT, 1], in: [[I.GUNPOWDER, 5], [B.SAND, 4]], table: true },
     { out: [B.WOOL, 1], in: [[I.STRING, 4]] },
   );
@@ -132,6 +140,8 @@
   function mining(blockId, heldId) {
     const b = BLOCKS[blockId], t = tool(heldId);
     if (b.hard < 0) return { time: Infinity, drops: false };
+    // ножницы: листва и шерсть режутся быстро, листва выпадает блоком
+    if (t && t.type === 'shears' && (b.leaves || b.burns && b.name.includes('шерсть') || blockId === B.WOOL)) return { time: b.leaves ? 0.05 : 0.25, drops: true, item: blockId };
     const drops = !b.level || (!!t && t.type === 'pick' && t.tier >= b.level);
     const speed = t && b.tool === t.type ? t.speed : 1;
     return { time: Math.max(0.05, b.hard * (drops ? 1.5 : 5) / speed), drops };
@@ -148,7 +158,7 @@
   // Недобываемые: в оригинальной версии их нельзя было взять из инвентаря — здесь у них отдельная вкладка
   const EXTRA = [B.GRASS, B.BEDROCK, B.SPRUCE, B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.REDSTONE_ORE, B.LAPIS_ORE,
     B.ICE, B.CLAY, B.TNT, B.WATER, B.LAVA, B.SNOW, B.FARMLAND, B.IRON_DOOR, B.WOOD_SLAB, B.COBBLE_SLAB, B.SANDSTONE_SLAB,
-    B.INV_BEDROCK, B.WOOL_C + 12, B.WOOL_C + 13, B.WOOL_C + 14, B.FIRE];
+    B.INV_BEDROCK, B.WOOL_C + 12, B.WOOL_C + 13, B.WOOL_C + 14];
 
   // ---------- Иконки ----------
   const icons = {};
