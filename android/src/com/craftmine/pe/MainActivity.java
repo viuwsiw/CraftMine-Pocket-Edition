@@ -18,6 +18,7 @@ import android.webkit.WebViewClient;
 /** CraftMine: Pocket Edition — игра работает внутри полноэкранного WebView из assets. */
 public class MainActivity extends Activity {
     private WebView web;
+    private Net net;
     private ValueCallback<Uri[]> fileCallback;
     private static final int PICK_IMAGE = 1001;
 
@@ -35,6 +36,7 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) { }
         }
 
+        net = new Net(this);
         createWebView();
         hideSystemUi();
     }
@@ -48,6 +50,8 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.1.0");
+        // Сетевая игра по Wi-Fi: window.CMNet
+        web.addJavascriptInterface(net, "CMNet");
         // Выбор PNG-файла для своих текстур
         web.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -76,6 +80,7 @@ public class MainActivity extends Activity {
                 if (parent != null) parent.removeView(web);
                 web.destroy();
                 web = null;
+                net.shutdown();
                 createWebView();
                 return true;
             }
@@ -146,6 +151,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        if (net != null) net.shutdown();
         if (web != null) web.destroy();
         super.onDestroy();
     }

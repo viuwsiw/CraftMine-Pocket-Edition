@@ -542,6 +542,9 @@ T['mutton_cooked'] = leg('#3e220e', '#6a4220', '#8e5e32', '#b07e4a')
 T['chicken_raw'] = leg('#a07868', '#d4a896', '#f0c8b6', '#fff0e6')
 T['chicken_cooked'] = leg('#5a3414', '#9a6028', '#c4863e', '#e2ad66')
 
+# Блоки и предметы версии 0.1.0 build 2 (свой генератор случайных чисел — старые текстуры не меняются)
+exec(open(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'draw-textures-2.py'), encoding='utf-8').read())
+
 os.makedirs(OUT + '/16v2', exist_ok=True)
 for k, im in T.items(): im.save(f'{OUT}/16v2/{k}.png')
 

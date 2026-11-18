@@ -15,6 +15,7 @@
     'blocks/bed_top.png': { tiles: ['bed_top_head', 'bed_top_foot'], w: 1, h: 2 },
     'blocks/bed_side.png': { tiles: ['bed_side_head', 'bed_side_foot'], w: 2, h: 1 },
     'blocks/bed_end.png': { tiles: ['bed_end_head', 'bed_end_foot'], w: 2, h: 1 },
+    'blocks/iron_door.png': { tiles: ['iron_door_top', 'iron_door_bottom'], w: 1, h: 2 },
   };
   const tileName = {};
   for (const n in TILES) tileName[TILES[n]] = n;
@@ -114,6 +115,33 @@
     { name: 'Дверь', faces: [F('Верх и низ', ['door_top', 'door_bottom'], 1, 2)] },
     { name: 'Люк', faces: [F('Все стороны', 'trapdoor')] },
     { name: 'Кровать', faces: [F('Верх: изголовье и ноги', ['bed_top_head', 'bed_top_foot'], 1, 2), F('Бок: изголовье и ноги', ['bed_side_head', 'bed_side_foot'], 2, 1), F('Торцы: изголовье и ноги', ['bed_end_head', 'bed_end_foot'], 2, 1)] },
+    { name: 'Обсидиан', faces: [F('Все стороны', 'obsidian')] },
+    { name: 'Песчаник', faces: [F('Верх', 'sandstone_top'), F('Бок', 'sandstone_side'), F('Низ', 'sandstone_bottom')], note: 'и песчаниковая плита' },
+    { name: 'Золотой блок', faces: [F('Все стороны', 'gold_block')] },
+    { name: 'Железный блок', faces: [F('Все стороны', 'iron_block')] },
+    { name: 'Алмазный блок', faces: [F('Все стороны', 'diamond_block')] },
+    { name: 'Ель', faces: [F('Кора', 'spruce_side'), F('Торец', 'spruce_top')] },
+    { name: 'Еловая хвоя', faces: [F('Все стороны', 'spruce_leaves')] },
+    { name: 'Берёзовая листва', faces: [F('Все стороны', 'birch_leaves')] },
+    { name: 'Редстоуновая руда', faces: [F('Все стороны', 'redstone_ore')] },
+    { name: 'Лазуритовая руда', faces: [F('Все стороны', 'lapis_ore')] },
+    { name: 'Лёд', faces: [F('Все стороны', 'ice')], note: 'прозрачность берётся из PNG' },
+    { name: 'Глина', faces: [F('Все стороны', 'clay')] },
+    { name: 'Динамит', faces: [F('Бок', 'tnt_side'), F('Верх', 'tnt_top'), F('Низ', 'tnt_bottom')] },
+    { name: 'Лава', faces: [F('Поверхность', 'lava')] },
+    { name: 'Снег', faces: [F('Снег', 'snow'), F('Бок травы под снегом', 'grass_snow')] },
+    { name: 'Пашня', faces: [F('Верх', 'farmland')] },
+    { name: 'Железная дверь', faces: [F('Верх и низ', ['iron_door_top', 'iron_door_bottom'], 1, 2)] },
+    { name: 'Каменная плита', faces: [F('Верх', 'stone_slab_top'), F('Бок', 'stone_slab_side')] },
+    { name: 'Факел', faces: [F('Картинка', 'torch')], note: 'палка — столбцы 7–8 по центру' },
+    { name: 'Лестница', faces: [F('Картинка', 'ladder')] },
+    { name: 'Огонь', faces: [F('Картинка', 'fire')] },
+    { name: 'Роза', faces: [F('Картинка', 'rose')] },
+    { name: 'Одуванчик', faces: [F('Картинка', 'dandelion')] },
+    { name: 'Красный гриб', faces: [F('Картинка', 'mushroom_red')] },
+    { name: 'Коричневый гриб', faces: [F('Картинка', 'mushroom_brown')] },
+    { name: 'Сахарный тростник', faces: [F('Картинка', 'sugar_cane')] },
+    { name: 'Цветная шерсть', faces: ['light_gray', 'gray', 'brown', 'red', 'yellow', 'green', 'lime', 'cyan', 'light_blue', 'blue', 'purple', 'pink', 'black', 'magenta', 'orange'].map((c) => F(c, 'wool_' + c)) },
   ];
   function itemEntries() {
     return CM.Items.CATALOG.filter((id) => !CM.Items.isBlock(id)).map((id) => {

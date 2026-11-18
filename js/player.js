@@ -64,7 +64,7 @@
     // Простая физика: гравитация, плавучесть в воде, столкновения. Возвращает true, если упёрлись в стену.
     simpleMove(dt, world, buoyancy) {
       const p = this.pos, v = this.vel;
-      const inWater = world.getBlock(Math.floor(p[0]), Math.floor(p[1] + this.h * 0.4), Math.floor(p[2])) === CM.B.WATER;
+      const inWater = CM.FLUID[world.getBlock(Math.floor(p[0]), Math.floor(p[1] + this.h * 0.4), Math.floor(p[2]))] > 0;
       this.inWater = inWater;
       if (inWater) { v[1] += (buoyancy - v[1]) * Math.min(1, dt * 4); }
       else v[1] = Math.max(-40, v[1] - GRAVITY * dt);
@@ -98,6 +98,9 @@
       this.fallTop = null;    // высота, с которой начался полёт вниз
       this.regen = 0;
       this.onHurt = null;
+      this.burnTimer = 0;     // урон от лавы и огня раз в полсекунды
+      this.inLava = false;
+      this.onLadder = false;
     }
 
     get eye() { return [this.pos[0], this.pos[1] + EYE, this.pos[2]]; }
@@ -143,8 +146,20 @@
     update(dt, input, world, opts) {
       const p = this.pos, v = this.vel;
       const B = CM.B;
-      this.inWater = world.getBlock(Math.floor(p[0]), Math.floor(p[1] + 0.4), Math.floor(p[2])) === B.WATER;
-      this.headInWater = world.getBlock(Math.floor(p[0]), Math.floor(p[1] + EYE), Math.floor(p[2])) === B.WATER;
+      const bx = Math.floor(p[0]), bz = Math.floor(p[2]);
+      const feet = world.getBlock(bx, Math.floor(p[1] + 0.4), bz), body = world.getBlock(bx, Math.floor(p[1] + 1.2), bz);
+      this.inLava = CM.FLUID[feet] === 2 || CM.FLUID[body] === 2;
+      this.inWater = CM.FLUID[feet] > 0; // в лаве плаваем так же, только медленнее и больно
+      this.headInWater = CM.FLUID[world.getBlock(bx, Math.floor(p[1] + EYE), bz)] === 1;
+      this.headInLava = CM.FLUID[world.getBlock(bx, Math.floor(p[1] + EYE), bz)] === 2;
+      const BL = CM.BLOCKS, ft = world.getBlock(bx, Math.floor(p[1] + 0.05), bz);
+      this.onLadder = !!((BL[ft] && BL[ft].climb) || (BL[body] && BL[body].climb));
+      // Лава и огонь жгут
+      const burning = this.inLava || ft === B.FIRE || body === B.FIRE;
+      if (burning) {
+        this.burnTimer -= dt;
+        if (this.burnTimer <= 0) { this.hurt(this.inLava ? 4 : 1); this.burnTimer = 0.5; }
+      } else this.burnTimer = 0;
       if (!this.canFly) this.flying = false;
 
       // Направление движения относительно взгляда
@@ -152,7 +167,7 @@
       const len = Math.hypot(f, s);
       if (len > 1) { f /= len; s /= len; }
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
-      const speed = this.flying ? FLY : WALK * (this.inWater ? 0.55 : 1);
+      const speed = this.flying ? FLY : WALK * (this.inLava ? 0.35 : this.inWater ? 0.55 : 1);
       const tx = (-sy * f + cy * s) * speed;
       const tz = (-cy * f - sy * s) * speed;
       const accel = this.flying ? 10 : (this.onGround || this.inWater ? 18 : 5);
@@ -169,6 +184,12 @@
         if (input.jump) v[1] = Math.min(v[1] + 20 * dt, 3.2);
         v[1] = Math.max(v[1], -3);
         v[1] *= Math.pow(0.4, dt);
+      } else if (this.onLadder) {
+        // Лестница: вперёд или прыжок — вверх, вниз — медленно спускаемся, «вниз» на крестовине — держимся
+        if (input.jump || (f > 0.1 && !this.onGround)) v[1] = 2.6;
+        else if (f > 0.1) v[1] = 2.6;
+        else if (input.down) v[1] = 0;
+        else v[1] = Math.max(v[1] - GRAVITY * dt, -2.2);
       } else {
         if (input.jump && this.onGround) v[1] = JUMP_V;
         v[1] -= GRAVITY * dt;
@@ -229,7 +250,7 @@
       if (this.inWater && hitH && len > 0.1 && !this.flying) v[1] = Math.max(v[1], 3);
 
       // Урон от падения: больше 3 блоков — по полсердца за блок
-      if (this.inWater || this.flying) this.fallTop = null;
+      if (this.inWater || this.flying || this.onLadder) this.fallTop = null;
       else if (!this.onGround) {
         if (this.fallTop === null || p[1] > this.fallTop) this.fallTop = p[1];
       } else if (this.fallTop !== null) {

@@ -93,4 +93,32 @@ window.CM = window.CM || {};
   }
 
   CM.Noise2D = Noise2D;
+
+  // Трёхмерный градиентный шум (перлин), примерно [-1, 1]: пещеры, пустоты, парящие острова
+  const G3 = [[1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0], [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1], [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]];
+  class Noise3D {
+    constructor(rand) {
+      const p = new Uint8Array(256);
+      for (let i = 0; i < 256; i++) p[i] = i;
+      for (let i = 255; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); const t = p[i]; p[i] = p[j]; p[j] = t; }
+      this.perm = new Uint8Array(512);
+      for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
+    }
+    noise(x, y, z) {
+      const P = this.perm;
+      const X = Math.floor(x), Y = Math.floor(y), Z = Math.floor(z);
+      x -= X; y -= Y; z -= Z;
+      const xi = X & 255, yi = Y & 255, zi = Z & 255;
+      const f = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+      const u = f(x), v = f(y), w = f(z);
+      const g = (h, a, b, c) => { const q = G3[h % 12]; return q[0] * a + q[1] * b + q[2] * c; };
+      const A = P[xi] + yi, AA = P[A] + zi, AB = P[A + 1] + zi, Bq = P[xi + 1] + yi, BA = P[Bq] + zi, BB = P[Bq + 1] + zi;
+      const l = (a, b, t) => a + t * (b - a);
+      return l(
+        l(l(g(P[AA], x, y, z), g(P[BA], x - 1, y, z), u), l(g(P[AB], x, y - 1, z), g(P[BB], x - 1, y - 1, z), u), v),
+        l(l(g(P[AA + 1], x, y, z - 1), g(P[BA + 1], x - 1, y, z - 1), u), l(g(P[AB + 1], x, y - 1, z - 1), g(P[BB + 1], x - 1, y - 1, z - 1), u), v), w);
+    }
+  }
+  CM.Noise3D = Noise3D;
+
 })(window.CM);

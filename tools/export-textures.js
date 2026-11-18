@@ -21,6 +21,7 @@ const COMBINED = {
   bed_top: { tiles: ['bed_top_head', 'bed_top_foot'], w: 1, h: 2 },
   bed_side: { tiles: ['bed_side_head', 'bed_side_foot'], w: 2, h: 1 },
   bed_end: { tiles: ['bed_end_head', 'bed_end_foot'], w: 2, h: 1 },
+  iron_door: { tiles: ['iron_door_top', 'iron_door_bottom'], w: 1, h: 2 },
 };
 const MISC = ['outline', 'crack_0', 'crack_1', 'crack_2', 'crack_3', 'sun', 'moon', 'furnace_front_on'];
 
@@ -103,7 +104,7 @@ ${table(d.items, false)}
     const inCombined = new Set(Object.values(COMBINED).flatMap((c) => c.tiles));
     const files = [];
     for (const name of Object.keys(CM.TILES)) {
-      if (inCombined.has(name)) continue;
+      if (inCombined.has(name) || /_fast$/.test(name)) continue; // *_fast — сплошная листва, делается из обычной при запуске
       let dir = 'blocks';
       if (itemTiles.has(name)) dir = 'items';
       else if (/^(pig|cow|sheep|chicken)_/.test(name)) dir = 'mobs';

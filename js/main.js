@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 1';
+  const VERSION = '0.1.0 alpha build 2';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -23,6 +23,8 @@
     autoJump: true,
     fallDamage: true,
     showCoords: false,
+    fancy: true,          // красивая графика: листва с просветами
+    lowQuality: false,    // пониженное качество: меньше пикселей на экране (для слабых телефонов)
     nickname: DEFAULT_NICK,
   }, store.get('settings', {}));
 
@@ -76,6 +78,7 @@
 
   // ---------- Свои текстуры ----------
   function refreshTextures() {
+    CM.Textures.makeFastLeaves();
     renderer.updateAtlas();
     CM.Geo.clearSpriteCache();
     if (typeof Items !== 'undefined' && Items) {
@@ -87,7 +90,7 @@
     document.documentElement.style.setProperty('--dirt-tex', `url(${CM.Textures.tileURL('dirt', 4)})`);
     $('icon-play').src = CM.Textures.blockIcon(CM.BLOCKS[CM.B.GRASS].tex, 96);
   }
-  CM.TexPack.loadSaved().then((n) => { if (n) refreshTextures(); });
+  CM.TexPack.loadSaved().then(() => refreshTextures());
   let texUI = null;
   const Bk = CM.B;
 
@@ -218,11 +221,15 @@
   const iconOf = (id) => Items.icon(id);
   const FACE_ICON = CM.Textures.tileURL('pl_face', 3);
   // Категории каталога творческого режима
+  const isWool = (id) => id === Bk.WOOL || (id >= Bk.WOOL_C && id < Bk.WOOL_C + Bk.WOOL_COUNT);
   const CATS = [
-    { name: 'Блоки', icon: () => iconOf(Bk.BRICKS), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && !BL[id].kind) },
+    { name: 'Блоки', icon: () => iconOf(Bk.BRICKS), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && !BL[id].kind && !BL[id].plant && !isWool(id)) },
+    { name: 'Шерсть', icon: () => iconOf(Bk.WOOL_C + 3), ids: Items.CATALOG.filter(isWool) },
+    { name: 'Растения', icon: () => iconOf(Bk.ROSE), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && BL[id].plant) },
     { name: 'Мебель и детали', icon: () => iconOf(Bk.DOOR), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && BL[id].kind) },
     { name: 'Инструменты', icon: () => iconOf(Items.toolId(2, 3)), ids: Items.CATALOG.filter((id) => Items.tool(id)) },
     { name: 'Материалы и еда', icon: () => iconOf(CM.I.BEEF), ids: Items.CATALOG.filter((id) => !Items.isBlock(id) && !Items.tool(id)) },
+    { name: 'Недобываемые блоки', icon: () => iconOf(Bk.TNT), ids: Items.EXTRA },
   ];
   const RCATS = [
     { name: 'Блоки и вещи', icon: () => iconOf(Bk.PLANKS), test: (r) => !Items.tool(r.out[0]) },
@@ -468,7 +475,7 @@
   }
 
   // ---------- Экраны ----------
-  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead', 'screen-inv', 'screen-textures'];
+  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead', 'screen-inv', 'screen-textures', 'screen-multi'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
     $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused' || state === 'dead' || state === 'inventory' || state === 'sleep'));
@@ -478,7 +485,7 @@
 
   // Главный экран
   tap('btn-play', () => { renderWorldList(); show('screen-worlds'); });
-  tap('btn-multi', () => toast('Мультиплеер появится в следующих версиях'));
+  tap('btn-multi', openMulti);
   tap('btn-settings', () => { settingsReturn = 'menu'; openSettings(); });
 
   // Список миров
@@ -563,7 +570,7 @@
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       name, seed, seedText: seedText || String(seed), type: worldType, mode: worldMode, inventory: null, time: 0.05, spawn: null,
       created: Date.now(), lastPlayed: Date.now(),
-      version: VERSION, player: null,
+      version: VERSION, player: null, gen: CM.GEN_VERSION,
     };
     rec.seed = seed;
     const list = loadWorlds(); list.push(rec); saveWorlds(list);
@@ -580,6 +587,8 @@
     $('set-autojump').checked = settings.autoJump;
     $('set-falldmg').checked = settings.fallDamage;
     $('set-coords').checked = settings.showCoords;
+    $('set-fancy').checked = settings.fancy;
+    $('set-lowq').checked = settings.lowQuality;
   }
   function openSettings() { syncSettingsUI(); show('screen-settings'); }
   $('set-rd').addEventListener('input', (e) => { settings.renderDistance = +e.target.value; syncSettingsUI(); });
@@ -594,6 +603,16 @@
   $('set-autojump').addEventListener('change', (e) => { settings.autoJump = e.target.checked; });
   $('set-falldmg').addEventListener('change', (e) => { settings.fallDamage = e.target.checked; });
   $('set-coords').addEventListener('change', (e) => { settings.showCoords = e.target.checked; });
+  $('set-fancy').addEventListener('change', (e) => { settings.fancy = e.target.checked; applyGraphics(); });
+  $('set-lowq').addEventListener('change', (e) => { settings.lowQuality = e.target.checked; applyGraphics(); });
+  // Красивая графика и пониженное качество
+  function applyGraphics() {
+    CM.setFancy(settings.fancy);
+    renderer.scale = settings.lowQuality ? 0.6 : 1;
+    renderer.resize();
+    if (world) world.remeshAll();
+    if (menuWorld) menuWorld.remeshAll();
+  }
   const applyNick = () => {
     settings.nickname = cleanNick($('set-nick').value);
     store.set('settings', settings);
@@ -631,6 +650,7 @@
     syncSettingsUI();
     $('toast').classList.add('hidden');
     $('pause-info').innerHTML = `Мир: ${escapeHtml(current.name)}<br>Режим: ${creative ? 'Творческий' : 'Выживание'}<br>Игрок: ${escapeHtml(nick())}`;
+    updatePauseNet();
     show('screen-pause');
   }
   function resume() {
@@ -655,6 +675,7 @@
   tap('btn-dead-quit', () => $('btn-quit').click());
   tap('btn-quit', () => {
     savePlayer();
+    netShutdown();
     if (world) world.dispose();
     world = null; player = null; current = null;
     state = 'menu';
@@ -704,11 +725,18 @@
     goFullscreen();
     current = rec;
     rec.lastPlayed = Date.now();
-    updateRecord(rec);
+    if (!rec.temp) updateRecord(rec);
     if (menuWorld) { menuWorld.dispose(); menuWorld = null; }
     world = new CM.World(renderer, rec.seed, rec.type);
-    world.importEdits(store.get('edits.' + rec.id, {}));
-    world.importTiles(store.get('tiles.' + rec.id, {}));
+    world.onIgnite = (x, y, z) => ignite(x, y, z, 4);
+    fuses.length = 0;
+    world.importEdits(rec.temp ? rec.edits : store.get('edits.' + rec.id, {}));
+    if (!rec.temp) world.importTiles(store.get('tiles.' + rec.id, {}));
+    if (net.client) {
+      // клиент: жидкости считает хозяин, свои изменения отправляем ему
+      world.simulate = false;
+      world.onSet = (x, y, z, b) => netSend({ t: 'set', x, y, z, b });
+    }
     ents = new CM.Entities(world);
     time = typeof rec.time === 'number' ? rec.time : 0.05;
     thirdPerson = false; viewMode = 0; $('btn-view').classList.remove('on');
@@ -735,6 +763,11 @@
       player.health = rec.player.health || 20;
       player.flying = creative && !!rec.player.flying;
       player.needsGround = false;
+      // мир из старой версии: ландшафт сгенерирован заново — ставим игрока на землю рядом с прежним местом
+      if ((rec.gen || 1) < CM.GEN_VERSION && rec.type !== 'flat') { player.needsGround = true; player.flying = false; }
+    } else if (rec.spawnAt) {
+      player.pos = [rec.spawnAt[0] + 1, 0, rec.spawnAt[2]];
+      player.needsGround = true;
     } else {
       const sp = world.findSpawn();
       player.pos = [sp.x, 0, sp.z];
@@ -755,11 +788,12 @@
   }
 
   function savePlayer() {
-    if (!current || !player || player.needsGround) return;
+    if (!current || !player || player.needsGround || current.temp) return;
     current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: player.flying };
     current.inventory = inv.toJSON();
     current.mode = creative ? 'creative' : 'survival';
     current.time = time;
+    current.gen = CM.GEN_VERSION;
     if (world) store.set('tiles.' + current.id, world.exportTiles());
     current.lastPlayed = Date.now();
     updateRecord(current);
@@ -844,7 +878,8 @@
     }
     if (hit) {
       const hb = BL[hit.id];
-      if (hb.kind === 'door' || hb.kind === 'trapdoor') { toggleOpen(hit.x, hit.y, hit.z, hit.id); swing = 1; return; }
+      if ((hb.kind === 'door' && !hb.iron) || hb.kind === 'trapdoor') { toggleOpen(hit.x, hit.y, hit.z, hit.id); swing = 1; return; }
+      if (hb.kind === 'tnt' && !(held && Items.isBlock(held))) { ignite(hit.x, hit.y, hit.z, 4); swing = 1; return; }
       if (hb.kind === 'crafting') { openInventory('table'); return; }
       if (hb.kind === 'chest') { openInventory('chest', world.tile(hit.x, hit.y, hit.z, () => ({ type: 'chest', slots: new Array(27).fill(null) }))); return; }
       if (hb.kind === 'furnace') { openInventory('furnace', world.tile(hit.x, hit.y, hit.z, () => ({ type: 'furnace', slots: [null, null, null], burn: 0, burnMax: 0, cook: 0 }))); return; }
@@ -859,20 +894,56 @@
       selectSlot(selected);
       return;
     }
+    // Камера: ставится на верх блока и стоит на треноге
+    if (held === CM.I.CAMERA && hit && hit.n[1] === 1) {
+      ents.spawnCamera([hit.x + 0.5, hit.y + 1.01, hit.z + 0.5], player.yaw);
+      if (!creative) { inv.takeOne(selected); selectSlot(selected); }
+      swing = 1;
+      return;
+    }
     if (!hit || !held || !Items.isBlock(held) || (!hit.n[0] && !hit.n[1] && !hit.n[2])) return;
-    const x = hit.x + hit.n[0], y = hit.y + hit.n[1], z = hit.z + hit.n[2];
+    const ib = BL[held], f = player.facing;
+    // Плита на плиту того же вида — целый блок
+    if (ib.kind === 'slab' && hit.id === held && hit.n[1] === 1) {
+      if (world.setBlock(hit.x, hit.y, hit.z, ib.full)) { swing = 1; if (!creative) { inv.takeOne(selected); selectSlot(selected); } }
+      return;
+    }
+    // Растение, снег или огонь в месте касания заменяются, блок ставится прямо туда
+    const into = CM.replaceable(hit.id) && !CM.FLUID[hit.id];
+    const x = into ? hit.x : hit.x + hit.n[0], y = into ? hit.y : hit.y + hit.n[1], z = into ? hit.z : hit.z + hit.n[2];
+    const blocksPlayer = ib.solid !== false && !ib.plant;
     const free = (bx, by, bz) => {
       if (by < 0 || by >= CM.H) return false;
       const c = world.getBlock(bx, by, bz);
-      return (c === Bk.AIR || c === Bk.WATER) && !player.intersectsBlock(bx, by, bz);
+      return CM.replaceable(c) && !(blocksPlayer && player.intersectsBlock(bx, by, bz)) && !remoteAt(bx, by, bz);
     };
     if (!free(x, y, z)) return;
-    const ib = BL[held], f = player.facing;
+    const below = world.getBlock(x, y - 1, z), bb = BL[below];
+    const fullBelow = bb && bb.solid && bb.opaque;
+    // направление к стене, к которой прислоняют (для факела и лестницы)
+    const wallDir = () => { const v = [-hit.n[0], -hit.n[2]]; return CM.DIRVEC.findIndex((d) => d[0] === v[0] && d[1] === v[1]); };
     let ok = false;
     if (ib.kind === 'door') {
-      const below = BL[world.getBlock(x, y - 1, z)];
-      if (!free(x, y + 1, z) || !below || !below.solid || below.boxes) return;
-      ok = world.setBlock(x, y, z, Bk.DOOR + f) && world.setBlock(x, y + 1, z, Bk.DOOR + f + 8);
+      if (!free(x, y + 1, z) || !bb || !bb.solid || bb.boxes) return;
+      ok = world.setBlock(x, y, z, held + f) && world.setBlock(x, y + 1, z, held + f + 8);
+    } else if (ib.kind === 'torch') {
+      if (hit.n[1] === 1 && fullBelow) ok = world.setBlock(x, y, z, Bk.TORCH);
+      else if (!hit.n[1] && BL[hit.id].opaque) ok = world.setBlock(x, y, z, Bk.TORCH + 1 + wallDir());
+      else return;
+    } else if (ib.kind === 'ladder') {
+      if (hit.n[1] || !BL[hit.id].opaque) return;
+      ok = world.setBlock(x, y, z, Bk.LADDER + wallDir());
+    } else if (ib.plant) {
+      if (ib.cane) {
+        let wet = false;
+        for (const d of CM.DIRVEC) if (CM.FLUID[world.getBlock(x + d[0], y - 1, z + d[1])] === 1) wet = true;
+        if (!(below === Bk.SUGAR_CANE || ((below === Bk.GRASS || below === Bk.DIRT || below === Bk.SAND) && wet))) return;
+      } else if (ib.mushroom) { if (!fullBelow) return; }
+      else if (below !== Bk.GRASS && below !== Bk.DIRT && below !== Bk.FARMLAND) return;
+      ok = world.setBlock(x, y, z, held);
+    } else if (ib.kind === 'snow' || ib.fire) {
+      if (!fullBelow) return;
+      ok = world.setBlock(x, y, z, held);
     } else if (ib.kind === 'bed') {
       const v = CM.DIRVEC[f];
       if (!free(x + v[0], y, z + v[1])) return;
@@ -903,14 +974,74 @@
 
   function breakBlock(hit, drops) {
     const b = BL[hit.id];
-    world.setBlock(hit.x, hit.y, hit.z, Bk.AIR);
+    // лёд тает в воду, если под ним не пусто
+    const under = world.getBlock(hit.x, hit.y - 1, hit.z);
+    world.setBlock(hit.x, hit.y, hit.z, hit.id === Bk.ICE && under !== Bk.AIR && !creative ? Bk.WATER : Bk.AIR);
     const o = otherHalf(hit.x, hit.y, hit.z, b);
     if (o) { const oid = world.getBlock(o[0], o[1], o[2]); if (BL[oid] && BL[oid].kind === b.kind) world.setBlock(o[0], o[1], o[2], Bk.AIR); }
     const c = [hit.x + 0.5, hit.y + 0.4, hit.z + 0.5];
     const tile = world.removeTile(hit.x, hit.y, hit.z);
-    if (creative) return;
-    if (tile) for (const s of tile.slots) if (s) ents.drop(s.id, s.count, s.dur, c);
-    if (drops && b.item) ents.drop(b.item, 1, undefined, c, [(Math.random() - 0.5) * 1.5, 2.5, (Math.random() - 0.5) * 1.5], 0.3);
+    if (!creative) {
+      if (tile) for (const s of tile.slots) if (s) ents.drop(s.id, s.count, s.dur, c);
+      if (drops && b.item) ents.drop(b.item, b.drops || 1, undefined, c, [(Math.random() - 0.5) * 1.5, 2.5, (Math.random() - 0.5) * 1.5], 0.3);
+    }
+    dropUnsupported(hit.x, hit.y, hit.z);
+  }
+
+  // Убрали блок — падают то, что на нём держалось: растения, факелы, снег, тростник сверху, лестницы и факелы на стенах
+  function dropUnsupported(x, y, z) {
+    const pop = (px, py, pz) => {
+      const id = world.getBlock(px, py, pz), d = BL[id];
+      world.setBlock(px, py, pz, Bk.AIR);
+      if (!creative && d.item) ents.drop(d.item, 1, undefined, [px + 0.5, py + 0.3, pz + 0.5]);
+      dropUnsupported(px, py, pz);
+    };
+    const up = world.getBlock(x, y + 1, z), ub = BL[up];
+    if (ub && (ub.plant || ub.kind === 'snow' || ub.fire || (ub.kind === 'torch' && !ub.wall))) pop(x, y + 1, z);
+    CM.DIRVEC.forEach((d, f) => {
+      const id = world.getBlock(x - d[0], y, z - d[1]), nb = BL[id];
+      if (nb && (nb.wall || nb.kind === 'ladder') && nb.facing === f) pop(x - d[0], y, z - d[1]);
+    });
+  }
+
+  // ---------- Динамит ----------
+  const fuses = [];
+  function ignite(x, y, z, delay) {
+    if (fuses.some((f) => f.x === x && f.y === y && f.z === z)) return;
+    fuses.push({ x, y, z, t: delay });
+    if (delay > 1) toast('Динамит подожжён!');
+  }
+  function tickFuses(dt) {
+    for (let i = fuses.length - 1; i >= 0; i--) {
+      const f = fuses[i];
+      f.t -= dt;
+      if (f.t > 0) continue;
+      fuses.splice(i, 1);
+      if (world.getBlock(f.x, f.y, f.z) === Bk.TNT) explode(f.x, f.y, f.z);
+    }
+  }
+  function explode(cx, cy, cz) {
+    world.setBlock(cx, cy, cz, Bk.AIR);
+    const R = 3.3;
+    for (let dy = -4; dy <= 4; dy++) for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
+      const d = Math.hypot(dx, dy, dz);
+      if (d > R + Math.random() * 0.8 - 0.4) continue;
+      const x = cx + dx, y = cy + dy, z = cz + dz, id = world.getBlock(x, y, z), b = BL[id];
+      if (id === Bk.AIR || !b || CM.FLUID[id] || b.hard < 0 || id === Bk.OBSIDIAN) continue;
+      if (id === Bk.TNT) { ignite(x, y, z, 0.3 + Math.random() * 0.7); continue; }
+      world.setBlock(x, y, z, Bk.AIR);
+      world.removeTile(x, y, z);
+      if (!creative && b.item && Math.random() < 0.3) ents.drop(b.item, 1, undefined, [x + 0.5, y + 0.5, z + 0.5]);
+    }
+    const c = [cx + 0.5, cy + 0.5, cz + 0.5];
+    const pd = Math.hypot(player.pos[0] - c[0], player.pos[1] + 0.9 - c[1], player.pos[2] - c[2]);
+    if (pd < 7) {
+      player.hurt(Math.floor((7 - pd) * 3));
+      const k = (7 - pd) * 2 / (pd || 1);
+      player.vel[0] += (player.pos[0] - c[0]) * k; player.vel[2] += (player.pos[2] - c[2]) * k; player.vel[1] += 5;
+    }
+    for (const m of ents.mobs.slice()) if (Math.hypot(m.pos[0] - c[0], m.pos[1] - c[1], m.pos[2] - c[2]) < 5) ents.hitMob(m, 12, c);
+    if (navigator.vibrate) try { navigator.vibrate(150); } catch (_) { /* ignore */ }
   }
 
   // Обработка ломания/установки, возвращает данные для подсветки
@@ -970,6 +1101,221 @@
     return left;
   }
 
+
+  // ---------- Сетевая игра по Wi-Fi ----------
+  // Хозяин открывает свой мир (пауза → «Открыть по Wi-Fi»), остальные находят его в «Мультиплеере».
+  // Хозяин хранит мир и считает жидкости; клиенты получают сид, все изменения и дальше — каждое поставленное
+  // или сломанное блоком, позиции игроков и время суток. Работает только в Android-приложении (window.CMNet).
+  const NET = window.CMNet || null;
+  const net = { host: false, client: false, id: 0, peers: new Map(), found: new Map(), tPos: 0, tTime: 0, connecting: false };
+  function netSend(o) { if (NET) NET.send(JSON.stringify(o)); }
+  function remoteAt(bx, by, bz) {
+    for (const r of net.peers.values()) {
+      const p = r.pos;
+      if (bx + 1 > p[0] - 0.3 && bx < p[0] + 0.3 && by + 1 > p[1] && by < p[1] + 1.8 && bz + 1 > p[2] - 0.3 && bz < p[2] + 0.3) return true;
+    }
+    return false;
+  }
+  function addPeer(id, name, p, yaw, pitch) {
+    const pos = (p || [0, -100, 0]).slice();
+    const r = { id, name: cleanNick(name), pos, tpos: pos.slice(), yaw: yaw || 0, pitch: pitch || 0, walk: 0, speed: 0, label: null };
+    net.peers.set(id, r);
+    return r;
+  }
+  function removePeer(id) {
+    const r = net.peers.get(id);
+    if (!r) return;
+    if (r.label) r.label.remove();
+    net.peers.delete(id);
+    toast(`${r.name} вышел из игры`);
+  }
+
+  function toggleHosting() {
+    if (!NET) { toast('Игра по Wi-Fi работает в Android-приложении'); return; }
+    if (net.client || !world) return;
+    if (net.host) {
+      NET.stopHost();
+      net.host = false;
+      for (const id of [...net.peers.keys()]) removePeer(id);
+      world.onSet = null;
+      toast('Мир закрыт для сети');
+    } else {
+      if (!NET.host(nick(), current.name)) return;
+      net.host = true; net.id = 0;
+      world.onSet = (x, y, z, b) => netSend({ t: 'set', x, y, z, b });
+      const ip = NET.localIp();
+      toast('Мир открыт для игры по Wi-Fi' + (ip ? ': ' + ip : ''), 4000);
+    }
+    updatePauseNet();
+  }
+  function updatePauseNet() {
+    const hb = $('btn-host'), cb = $('btn-copy-world');
+    hb.classList.toggle('hidden', net.client);
+    cb.classList.toggle('hidden', !net.client);
+    hb.textContent = net.host ? 'Закрыть для сети' : 'Открыть по Wi-Fi';
+    const st = $('net-info');
+    if (net.host) {
+      const ip = NET ? NET.localIp() : '';
+      st.textContent = `Мир открыт по Wi-Fi${ip ? ' (IP ' + ip + ')' : ''}. Игроков: ${net.peers.size}`;
+    } else if (net.client) st.textContent = `Сетевая игра. Игроков рядом: ${net.peers.size + 1}`;
+    else st.textContent = '';
+  }
+  tap('btn-host', toggleHosting);
+  tap('btn-copy-world', copyWorld);
+
+  // «Скопировать мир»: сохранить мир сетевой игры у себя, чтобы играть в него без сети
+  function copyWorld() {
+    if (!world || !current) return;
+    const now = Date.now();
+    const rec = {
+      id: now.toString(36) + Math.random().toString(36).slice(2, 6),
+      name: (current.name || 'Мир') + ' (копия)', seed: current.seed, seedText: String(current.seed), type: current.type,
+      mode: current.mode, inventory: inv.toJSON(), time, spawn: null, created: now, lastPlayed: now, version: VERSION, gen: CM.GEN_VERSION,
+      player: { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: false },
+    };
+    const list = loadWorlds(); list.push(rec); saveWorlds(list);
+    store.set('edits.' + rec.id, world.exportEdits());
+    toast(`Мир сохранён: «${rec.name}»`, 3500);
+  }
+
+  function netShutdown() {
+    if (!NET) return;
+    if (net.host) NET.stopHost();
+    if (net.client) NET.leave();
+    net.host = net.client = net.connecting = false;
+    for (const r of net.peers.values()) if (r.label) r.label.remove();
+    net.peers.clear();
+    if (ents) ents.remote = [];
+  }
+
+  // Экран «Мультиплеер»: найденные игры и подключение по IP
+  function openMulti() {
+    show('screen-multi');
+    net.found.clear();
+    renderFound();
+    if (!NET) { $('multi-status').textContent = 'Игра по Wi-Fi работает в Android-приложении CraftMine PE.'; return; }
+    $('multi-status').textContent = 'Ищем игры в этой Wi-Fi сети… Друг должен открыть мир: пауза → «Открыть по Wi-Fi».';
+    NET.discover(true);
+  }
+  function renderFound() {
+    const box = $('multi-list');
+    box.innerHTML = '';
+    if (!net.found.size) { box.innerHTML = '<div class="empty-note">Пока игр не найдено</div>'; return; }
+    for (const g of net.found.values()) {
+      const it = document.createElement('div');
+      it.className = 'world-item';
+      it.innerHTML = '<div class="world-meta"><div class="world-name"></div><div class="world-sub"></div></div>';
+      it.querySelector('.world-name').textContent = g.world || 'Мир';
+      it.querySelector('.world-sub').textContent = `Игрок: ${g.name || '?'} · ${g.ip}`;
+      it.addEventListener('click', () => joinGame(g.ip));
+      box.appendChild(it);
+    }
+  }
+  function joinGame(ip) {
+    if (!NET || net.connecting) return;
+    ip = String(ip || '').trim();
+    if (!/^[\w.:-]+$/.test(ip)) { toast('Введи IP-адрес'); return; }
+    net.connecting = true;
+    $('multi-status').textContent = `Подключаемся к ${ip}…`;
+    NET.join(ip);
+  }
+  tap('btn-multi-ip', () => joinGame($('multi-ip').value));
+  tap('btn-multi-back', () => {
+    if (NET) { NET.discover(false); if (net.connecting) NET.leave(); }
+    net.connecting = false;
+    show('screen-menu');
+  });
+
+  function netPoll(dt) {
+    if (!NET) return;
+    let evs;
+    try { evs = JSON.parse(NET.poll()); } catch (_) { return; }
+    for (const e of evs) {
+      if (e.e === 'found') { if (!net.found.has(e.ip)) { net.found.set(e.ip, e); renderFound(); } }
+      else if (e.e === 'error') { toast(e.m, 4000); if (net.connecting) { net.connecting = false; $('multi-status').textContent = e.m; } }
+      else if (e.e === 'connected') { net.client = true; NET.send(JSON.stringify({ t: 'hello', name: nick(), v: VERSION })); $('multi-status').textContent = 'Загружаем мир…'; }
+      else if (e.e === 'closed') { if (net.client || net.connecting) { toast('Соединение с хозяином потеряно', 4000); netShutdown(); if (world) $('btn-quit').click(); else show('screen-menu'); } }
+      else if (e.e === 'leave') { if (net.host) { removePeer(e.id); netSend({ t: 'leave', id: e.id }); updatePauseNet(); } }
+      else if (e.e === 'msg') { let m; try { m = JSON.parse(e.d); } catch (_) { continue; } onNetMsg(e.id, m); }
+    }
+    if (!(net.host || net.client) || !player || !world) return;
+    if (state === 'game' || state === 'paused' || state === 'inventory' || state === 'sleep') {
+      net.tPos += dt;
+      if (net.tPos > 0.1 && net.peers.size) {
+        net.tPos = 0;
+        netSend({ t: 'pos', id: net.id, p: player.pos.map((v) => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3) });
+      }
+      if (net.host) { net.tTime += dt; if (net.tTime > 5) { net.tTime = 0; netSend({ t: 'time', v: time }); } }
+    }
+    // плавное движение других игроков
+    for (const r of net.peers.values()) {
+      const k = Math.min(1, dt * 10), old = r.pos.slice();
+      for (let a = 0; a < 3; a++) r.pos[a] += (r.tpos[a] - r.pos[a]) * k;
+      r.speed = Math.hypot(r.pos[0] - old[0], r.pos[2] - old[2]) / Math.max(dt, 1e-3);
+      r.walk += r.speed * dt * 2.2;
+    }
+    if (ents) ents.remote = [...net.peers.values()];
+  }
+
+  function onNetMsg(from, m) {
+    if (net.host) {
+      if (m.t === 'hello') {
+        const r = addPeer(from, m.name, null, 0, 0);
+        const players = [{ id: 0, name: nick(), p: player.pos, yaw: player.yaw, pitch: player.pitch }];
+        for (const o of net.peers.values()) if (o.id !== from) players.push({ id: o.id, name: o.name, p: o.tpos, yaw: o.yaw, pitch: o.pitch });
+        NET.sendTo(from, JSON.stringify({ t: 'welcome', id: from, seed: current.seed, type: current.type, mode: creative ? 'creative' : 'survival',
+          world: current.name, host: nick(), time, edits: world.exportEdits(), spawn: player.pos, players }));
+        NET.sendExcept(from, JSON.stringify({ t: 'join', id: from, name: r.name }));
+        toast(`${r.name} присоединился к игре`);
+        updatePauseNet();
+      } else if (m.t === 'pos') {
+        const r = net.peers.get(from);
+        if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; }
+        NET.sendExcept(from, JSON.stringify({ t: 'pos', id: from, p: m.p, yaw: m.yaw, pitch: m.pitch }));
+      } else if (m.t === 'set') {
+        if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true);
+        NET.sendExcept(from, JSON.stringify({ t: 'set', x: m.x, y: m.y, z: m.z, b: m.b }));
+      }
+      return;
+    }
+    if (!net.client) return;
+    if (m.t === 'welcome') {
+      net.id = m.id; net.connecting = false;
+      NET.discover(false);
+      for (const p of m.players || []) addPeer(p.id, p.name, p.p, p.yaw, p.pitch);
+      startWorld({ id: 'net', temp: true, name: m.world, seed: m.seed, seedText: String(m.seed), type: m.type, mode: m.mode, time: m.time,
+        edits: m.edits, spawnAt: m.spawn, inventory: null, player: null, gen: CM.GEN_VERSION });
+      toast(`Ты в мире игрока ${cleanNick(m.host)}`, 3000);
+    } else if (m.t === 'pos') {
+      const r = net.peers.get(m.id);
+      if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; }
+    } else if (m.t === 'set') { if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true); }
+    else if (m.t === 'join') { addPeer(m.id, m.name); toast(`${cleanNick(m.name)} присоединился к игре`); }
+    else if (m.t === 'leave') removePeer(m.id);
+    else if (m.t === 'time') time = m.v;
+  }
+
+  // Ники над головами других игроков
+  function updateLabels(cam) {
+    $('labels').style.display = state === 'game' ? '' : 'none';
+    if (!net.peers.size) return;
+    const w = window.innerWidth, h = window.innerHeight, t = Math.tan(35 * Math.PI / 180);
+    const cp = Math.cos(cam.pitch);
+    const f = [-Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp];
+    const r = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
+    const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
+    for (const p of net.peers.values()) {
+      if (!p.label) { p.label = document.createElement('div'); p.label.className = 'name-tag'; p.label.textContent = p.name; $('labels').appendChild(p.label); }
+      const v = [p.pos[0] - cam.x, p.pos[1] + 2.15 - cam.y, p.pos[2] - cam.z];
+      const z = v[0] * f[0] + v[1] * f[1] + v[2] * f[2];
+      const d = Math.hypot(v[0], v[1], v[2]);
+      if (z < 0.2 || d > 48 || state === 'menu') { p.label.style.display = 'none'; continue; }
+      const x = (v[0] * r[0] + v[1] * r[1] + v[2] * r[2]) / (z * t * (w / h)), y = (v[0] * u[0] + v[1] * u[1] + v[2] * u[2]) / (z * t);
+      p.label.style.display = 'block';
+      p.label.style.transform = `translate(${((x + 1) / 2 * w).toFixed(1)}px, ${((1 - y) / 2 * h).toFixed(1)}px) translate(-50%, -100%)`;
+    }
+  }
+
   // ---------- Игровой цикл ----------
   let last = performance.now();
   let fpsFrames = 0, fpsTime = 0, fps = 0;
@@ -986,6 +1332,7 @@
     if (fpsTime >= 0.5) { fps = Math.round(fpsFrames / fpsTime); fpsFrames = 0; fpsTime = 0; }
 
     const R = settings.renderDistance;
+    netPoll(dt);
 
     if (state === 'menu') {
       if (!menuWorld) makeMenuWorld();
@@ -1042,7 +1389,8 @@
         const p = player.pos, h = ((creative ? 0.2 : time) * 24 + 6) % 24;
         $('debug').textContent =
           `CraftMine PE ${VERSION}\n${nick()}  ${fps} FPS\nXYZ: ${p[0].toFixed(1)} / ${p[1].toFixed(1)} / ${p[2].toFixed(1)}\n` +
-          `Время: ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor(h % 1 * 60)).padStart(2, '0')}  Животных: ${ents.mobs.length}`;
+          `Время: ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor(h % 1 * 60)).padStart(2, '0')}  Животных: ${ents.mobs.length}\n` +
+          `Биом: ${CM.BIOME_NAMES[world.biomeAt(p[0], p[2])]}`;
       }
     }
 
@@ -1058,14 +1406,17 @@
 
     // Мир живёт, пока открыт инвентарь: животные, предметы, печи, время суток
     if (state === 'game' || state === 'inventory') {
-      ents.update(dt, { player, R, onPickup });
+      ents.update(dt, { player, R, onPickup, spawn: !net.client });
       tickFurnaces(dt);
+      tickFuses(dt);
+      world.tick(dt);
       if (!creative) time = (time + dt / DAY_LEN) % 1;
       if (state === 'inventory' && (furnaceEls || invSection === 'inv')) syncInv();
     }
 
     world.update(player.pos[0], player.pos[2], R, 2, 2);
     const cam = viewCam();
+    updateLabels(cam);
     const extras = interact(dt, cam, now);
     swing = Math.max(0, swing - dt * 3.5);
     const sky = dayLight();
@@ -1081,12 +1432,12 @@
       const slot = inv.slots[selected], held = slot ? slot.id : 0;
       const hand = { swing, bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs), bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs), light: player.headInWater ? 0.7 : 1 };
       if (!held) hand.arm = true;
-      else if (Items.isBlock(held)) hand.shape = Items.itemShape(held);
-      else hand.sprite = Items.sprite(held);
+      else if (Items.sprite(held) !== null) hand.sprite = Items.sprite(held);
+      else hand.shape = Items.itemShape(held);
       extras.hand = hand;
     }
     extras.meshes = [{ verts: new Float32Array(m.normal) }, { verts: new Float32Array(m.hurt), tint: [1, 0.45, 0.45] }];
-    renderer.render(world, cam, R, player.headInWater && !thirdPerson, extras);
+    renderer.render(world, cam, R, thirdPerson ? false : player.headInLava ? 'lava' : player.headInWater, extras);
   }
 
   // Кнопка «Назад» в Android: true — обработано, false — выйти из приложения
@@ -1100,6 +1451,7 @@
       resume(); return true;
     }
     if (state === 'dead' || state === 'loading' || state === 'sleep') return true;
+    if (visible('screen-multi')) { $('btn-multi-back').click(); return true; }
     if (visible('screen-create')) { show('screen-worlds'); return true; }
     if (visible('screen-worlds')) { show('screen-menu'); return true; }
     if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
@@ -1112,6 +1464,7 @@
   document.addEventListener('contextmenu', (e) => e.preventDefault());
   document.addEventListener('gesturestart', (e) => e.preventDefault());
 
+  applyGraphics();
   show('screen-menu');
   requestAnimationFrame(frame);
 

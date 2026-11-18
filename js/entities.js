@@ -31,6 +31,14 @@
       { c: [0, 8, 0], s: [6, 6, 8], t: all(T.chicken_body) },
       { c: [0, 13, -4.5], s: [4, 6, 3], t: faced(T.chicken_body, T.chicken_face), pivot: [0, 10, -3], head: true },
     ] },
+    // Камера на треноге: пока ничего не делает (как в оригинальной версии)
+    camera: { scale: 1 / 16, parts: [
+      { c: [-2.5, 6, 1.5], s: [1, 12, 1], t: all(T.planks) },
+      { c: [2.5, 6, 1.5], s: [1, 12, 1], t: all(T.planks) },
+      { c: [0, 6, -2.5], s: [1, 12, 1], t: all(T.planks) },
+      { c: [0, 15, 0], s: [8, 6, 5], t: all(T.wool_black), head: true, pivot: [0, 13, 0] },
+      { c: [0, 15, -3], s: [3, 3, 2], t: all(T.wool_light_blue), head: true, pivot: [0, 13, 0] },
+    ] },
     player: { scale: 1.8 / 32, parts: [
       { c: [-2, 6, 0], s: [4, 12, 4], t: all(T.pl_leg), pivot: [-2, 12, 0], swing: 1 },
       { c: [2, 6, 0], s: [4, 12, 4], t: all(T.pl_leg), pivot: [2, 12, 0], swing: -1 },
@@ -82,8 +90,9 @@
     cow: { hw: 0.45, h: 1.35, hp: 10, speed: 0.9, drops: [[I.BEEF_RAW, 1, 2]] },
     sheep: { hw: 0.45, h: 1.3, hp: 8, speed: 1.0, drops: [[I.MUTTON_RAW, 1, 1], [B.WOOL, 1, 1]] },
     chicken: { hw: 0.2, h: 0.7, hp: 4, speed: 0.8, drops: [[I.CHICKEN_RAW, 1, 1]] },
+    camera: { hw: 0.3, h: 1.1, hp: 1, speed: 0, drops: [[I.CAMERA, 1, 1]], still: true },
   };
-  const MOB_TYPES = Object.keys(MOB);
+  const MOB_TYPES = Object.keys(MOB).filter((k) => !MOB[k].still); // сами появляются только животные
   const wrap = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
   class Mob extends CM.Body {
@@ -106,6 +115,7 @@
     ai(dt, world) {
       const p = this.pos, v = this.vel;
       this.hurtTime = Math.max(0, this.hurtTime - dt);
+      if (this.def.still) { v[0] *= 0.5; v[2] *= 0.5; this.simpleMove(dt, world, 0.5); return; }
       let speed = this.def.speed;
       if (this.panic > 0) {
         // Испуг: бежит и часто меняет направление
@@ -127,10 +137,10 @@
       // Не идти в воду и с обрыва
       if (this.moving && this.onGround) {
         const ax = Math.floor(p[0] + dx * (this.hw + 0.6)), az = Math.floor(p[2] + dz * (this.hw + 0.6)), ay = Math.floor(p[1] + 0.1);
-        let ground = false, water = world.getBlock(ax, ay, az) === B.WATER;
+        let ground = false, water = CM.FLUID[world.getBlock(ax, ay, az)] > 0;
         for (let k = 1; k <= 3 && !ground; k++) {
           const id = world.getBlock(ax, ay - k, az);
-          if (id === B.WATER) { water = true; break; }
+          if (CM.FLUID[id]) { water = true; break; }
           if (CM.SOLID[id]) ground = true;
         }
         if (!ground || water) { this.yawTarget = this.yaw + Math.PI * (0.6 + Math.random() * 0.8); if (this.panic <= 0) { this.moving = false; this.timer = 0.4; } }
@@ -208,7 +218,8 @@
         for (let y = CM.H - 3; y > 1; y--) {
           const id = w.getBlock(x, y, z);
           if (id === B.AIR) continue;
-          if (id === B.GRASS && w.getBlock(x, y + 1, z) === B.AIR && w.getBlock(x, y + 2, z) === B.AIR) this.mobs.push(new Mob(type, [x + 0.5, y + 1.01, z + 0.5]));
+          if (id === B.SNOW) continue;
+          if (id === B.GRASS && w.getBlock(x, y + 2, z) === B.AIR) this.mobs.push(new Mob(type, [x + 0.5, y + 1.01, z + 0.5]));
           break;
         }
       }
@@ -242,13 +253,13 @@
       for (let i = this.mobs.length - 1; i >= 0; i--) {
         const m = this.mobs[i];
         const dx = m.pos[0] - pl.pos[0], dz = m.pos[2] - pl.pos[2];
-        if (dx * dx + dz * dz > far * far || m.pos[1] < -10) { this.mobs.splice(i, 1); continue; }
+        if ((dx * dx + dz * dz > far * far && !m.def.still) || m.pos[1] < -10) { this.mobs.splice(i, 1); continue; }
         if (w.isLoadedAt(m.pos[0], m.pos[2])) m.ai(dt, w);
       }
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
         this.spawnTimer = 1.5;
-        if (this.mobs.length < 14) this._trySpawn(pl, ctx.R);
+        if (this.mobs.length < 14 && ctx.spawn !== false) this._trySpawn(pl, ctx.R);
       }
     }
 
@@ -259,10 +270,14 @@
         const swing = Math.sin(m.walk) * 0.7 * Math.min(1, Math.hypot(m.vel[0], m.vel[2]) * 1.5);
         buildModel(m.hurtTime > 0 ? hurt : normal, m.type, m.pos[0], m.pos[1], m.pos[2], m.yaw, { swing, headPitch: m.headPitch }, 1);
       }
+      // Другие игроки в сетевой игре
+      for (const r of this.remote || []) {
+        buildModel(normal, 'player', r.pos[0], r.pos[1], r.pos[2], r.yaw, { swing: Math.sin(r.walk || 0) * 0.7 * Math.min(1, r.speed || 0), headPitch: r.pitch }, 1);
+      }
       for (const it of this.items) {
         const a = it.spin + it.age * 1.8, ca = Math.cos(a), sa = Math.sin(a);
         const by = it.pos[1] + 0.22 + Math.sin(it.age * 2.5) * 0.06;
-        const block = CM.Items.isBlock(it.id);
+        const block = CM.Items.isBlock(it.id) && CM.Items.sprite(it.id) === null;
         const size = block ? 0.3 : 0.45;
         const xf = (p) => {
           const x = (p[0] - 0.5) * size, y = (p[1] - 0.5) * size, z = (p[2] - 0.5) * size;
@@ -278,6 +293,7 @@
   }
 
   CM.Models = { build: buildModel };
+  Entities.prototype.spawnCamera = function (pos, yaw) { const m = new Mob('camera', pos); m.yaw = yaw; this.mobs.push(m); };
   CM.Entities = Entities;
   CM.Mob = Mob;
 })(window.CM);

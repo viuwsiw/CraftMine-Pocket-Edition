@@ -240,4 +240,48 @@
   });
   paint('pl_arm', (x, y) => (y >= 12 ? vary(SKIN, 0.03) : y === 11 ? mul(SHIRT, 0.75) : vary(SHIRT, 0.05)));
   paint('pl_leg', (x, y) => (y >= 14 ? [236, 236, 236, 255] : y === 13 ? [150, 150, 156, 255] : vary(PANTS, 0.06)));
+  // ---------- 0.1.0 build 2: запасные тайлы новых блоков (основной рисунок — PNG в textures/) ----------
+  // Каждый тайл здесь регистрируется по имени, чтобы PNG из пака и свои текстуры игрока легли на своё место.
+  const EXTRA = {
+    obsidian: '#1a1424', sandstone_top: '#dcc890', sandstone_side: '#d6c28b', sandstone_bottom: '#c9b47d',
+    gold_block: '#f0c433', iron_block: '#d2d2d2', diamond_block: '#5be6da', spruce_side: '#3d2915', spruce_top: '#7d5c34',
+    spruce_leaves: ['#2c5838', 0.2], birch_leaves: ['#5c9136', 0.2], ice: ['#9cc0f4', 0, 200], clay: '#a3a9b6',
+    tnt_side: '#c92a20', tnt_top: '#8f8b80', tnt_bottom: '#6f6b60', lava: '#e8670e', snow: '#f2f6fa', grass_snow: '#86603f',
+    farmland: '#4e3522', iron_door_top: '#a2a2a8', iron_door_bottom: '#a2a2a8', stone_slab_top: '#a8a8a8', stone_slab_side: '#9c9c9c',
+    wool_light_gray: '#9d9da4', wool_gray: '#4a4f54', wool_brown: '#6f4728', wool_red: '#a42a24', wool_yellow: '#e6c12a',
+    wool_green: '#4d6a1c', wool_lime: '#72b81c', wool_cyan: '#16878f', wool_light_blue: '#3fa9d8', wool_blue: '#30378f',
+    wool_purple: '#76298f', wool_pink: '#e4829e', wool_black: '#1b1b1f', wool_magenta: '#b33eaa', wool_orange: '#e8781a',
+  };
+  for (const n in EXTRA) {
+    const e = Array.isArray(EXTRA[n]) ? EXTRA[n] : [EXTRA[n], 0];
+    const c = hex(e[0]);
+    paint(n, () => (e[1] && rand() < e[1] ? [0, 0, 0, 0] : vary([c[0], c[1], c[2], e[2] || 255], 0.08)));
+  }
+  redOre('redstone_ore', [220, 30, 30]);
+  redOre('lapis_ore', [40, 80, 200]);
+  function redOre(n, col) { ore(n, col, col.map((v) => Math.min(255, v + 60))); }
+  // Растения, факел, лестница, огонь, камера: простые силуэты на прозрачном фоне
+  paint('rose', (x, y) => (inR(x, y, 6, 2, 9, 5) ? [50, 110, 240, 255] : (x === 7 && y > 5 && y < 15) ? [47, 107, 31, 255] : [0, 0, 0, 0]));
+  paint('dandelion', (x, y) => (inR(x, y, 6, 3, 9, 5) ? [255, 226, 58, 255] : (x === 7 && y > 5 && y < 15) ? [47, 107, 31, 255] : [0, 0, 0, 0]));
+  paint('mushroom_red', (x, y) => (inR(x, y, 4, 6, 11, 8) ? [212, 42, 34, 255] : inR(x, y, 6, 9, 9, 13) ? [232, 224, 208, 255] : [0, 0, 0, 0]));
+  paint('mushroom_brown', (x, y) => (inR(x, y, 4, 6, 11, 8) ? [138, 96, 64, 255] : inR(x, y, 6, 9, 9, 13) ? [232, 224, 208, 255] : [0, 0, 0, 0]));
+  paint('sugar_cane', (x) => (x % 5 === 3 || x % 5 === 4 ? [120, 173, 66, 255] : [0, 0, 0, 0]));
+  paint('torch', (x, y) => ((x === 7 || x === 8) && y >= 5 ? (y < 8 ? [255, 208, 74, 255] : [107, 79, 44, 255]) : [0, 0, 0, 0]));
+  paint('ladder', (x, y) => (x === 2 || x === 3 || x === 12 || x === 13 || (y % 4 === 1 && x > 3 && x < 12) ? [135, 104, 58, 255] : [0, 0, 0, 0]));
+  paint('fire', (x, y) => (y > 6 + (x * 7) % 5 ? (y > 12 ? [232, 100, 26, 255] : [255, 180, 50, 255]) : [0, 0, 0, 0]));
+  // Сплошная листва для быстрой графики: заполняется из обычной (см. CM.Textures.makeFastLeaves)
+  for (const n of ['leaves', 'birch_leaves', 'spruce_leaves']) paint(n + '_fast', () => [40, 80, 30, 255]);
+  T.makeFastLeaves = function () {
+    const TS = T.tile, per = T.perRow, ctx = T.ctx, TL = CM.TILES;
+    for (const n of ['leaves', 'birch_leaves', 'spruce_leaves']) {
+      const a = TL[n], b = TL[n + '_fast'];
+      const img = ctx.getImageData((a % per) * TS, Math.floor(a / per) * TS, TS, TS), d = img.data;
+      let r = 0, g = 0, bl = 0, k = 0;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 128) { r += d[i]; g += d[i + 1]; bl += d[i + 2]; k++; }
+      k = k || 1;
+      for (let i = 0; i < d.length; i += 4) if (d[i + 3] <= 128) { d[i] = r / k * 0.55; d[i + 1] = g / k * 0.55; d[i + 2] = bl / k * 0.55; d[i + 3] = 255; }
+      ctx.putImageData(img, (b % per) * TS, Math.floor(b / per) * TS);
+    }
+  };
+  paint('camera', (x, y) => (inR(x, y, 1, 5, 14, 12) ? (inR(x, y, 4, 7, 6, 9) ? [60, 110, 190, 255] : [70, 70, 80, 255]) : [0, 0, 0, 0]));
 })(window.CM);

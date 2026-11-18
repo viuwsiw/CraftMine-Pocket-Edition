@@ -12,12 +12,16 @@ uniform float uFogNear;
 uniform float uFogFar;
 varying vec2 vUV;
 varying float vLight;
+varying float vBlock;
 varying float vFog;
 void main() {
   vec4 vp = uView * vec4(aPos + uOffset, 1.0);
   gl_Position = uProj * vp;
   vUV = aUV;
-  vLight = aLight;
+  // aLight = оттенок (0..1) + 2 * свет от факелов (0..15)
+  float bl = floor(aLight * 0.5 + 0.001);
+  vLight = aLight - bl * 2.0;
+  vBlock = bl > 0.5 ? pow(0.8, 15.0 - bl) : 0.0; // как в Minecraft: каждый блок от источника — на 20% темнее
   vFog = clamp((length(vp.xyz) - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0);
 }`;
 
@@ -29,11 +33,13 @@ uniform float uAlphaTest;
 uniform vec3 uTint;
 varying vec2 vUV;
 varying float vLight;
+varying float vBlock;
 varying float vFog;
 void main() {
   vec4 c = texture2D(uTex, vUV);
   if (c.a < uAlphaTest) discard;
-  gl_FragColor = vec4(mix(c.rgb * vLight * uTint, uFogColor, vFog), c.a);
+  vec3 lc = max(uTint, vec3(vBlock, vBlock * 0.9, vBlock * 0.72));
+  gl_FragColor = vec4(mix(c.rgb * vLight * lc, uFogColor, vFog), c.a);
 }`;
 
   // ---- матрицы (column-major) ----
@@ -445,7 +451,7 @@ void main() {
       const ex = extras || {};
       const tint = ex.light || [1, 1, 1];
       const sky = ex.sky || this.sky;
-      const fog = underwater ? [0.12 * tint[0], 0.25 * tint[1], 0.6 * tint[2]] : sky;
+      const fog = underwater === 'lava' ? [0.75, 0.25, 0.04] : underwater ? [0.12 * tint[0], 0.25 * tint[1], 0.6 * tint[2]] : sky;
       gl.clearColor(fog[0], fog[1], fog[2], 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       if (!world) return;
@@ -464,8 +470,8 @@ void main() {
       if (ex.sunAngle !== undefined && !underwater) this._drawSky(cam, ex.sunAngle);
       gl.uniform3fv(this.u.uTint, tint);
       if (underwater) {
-        gl.uniform1f(this.u.uFogNear, 2);
-        gl.uniform1f(this.u.uFogFar, 18);
+        gl.uniform1f(this.u.uFogNear, underwater === 'lava' ? 0.1 : 2);
+        gl.uniform1f(this.u.uFogFar, underwater === 'lava' ? 2.5 : 18);
       } else {
         gl.uniform1f(this.u.uFogNear, R * CS * 0.55);
         gl.uniform1f(this.u.uFogFar, R * CS * 0.95);

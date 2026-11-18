@@ -74,6 +74,54 @@
 | Кровать | Верх: изголовье и ноги | [`blocks/bed_top.png`](blocks/bed_top.png) | 32×64 |
 | Кровать | Бок: изголовье и ноги | [`blocks/bed_side.png`](blocks/bed_side.png) | 64×32 |
 | Кровать | Торцы: изголовье и ноги | [`blocks/bed_end.png`](blocks/bed_end.png) | 64×32 |
+| Обсидиан | Все стороны | [`blocks/obsidian.png`](blocks/obsidian.png) | 32×32 |
+| Песчаник | Верх (и песчаниковая плита) | [`blocks/sandstone_top.png`](blocks/sandstone_top.png) | 32×32 |
+| Песчаник | Бок (и песчаниковая плита) | [`blocks/sandstone_side.png`](blocks/sandstone_side.png) | 32×32 |
+| Песчаник | Низ (и песчаниковая плита) | [`blocks/sandstone_bottom.png`](blocks/sandstone_bottom.png) | 32×32 |
+| Золотой блок | Все стороны | [`blocks/gold_block.png`](blocks/gold_block.png) | 32×32 |
+| Железный блок | Все стороны | [`blocks/iron_block.png`](blocks/iron_block.png) | 32×32 |
+| Алмазный блок | Все стороны | [`blocks/diamond_block.png`](blocks/diamond_block.png) | 32×32 |
+| Ель | Кора | [`blocks/spruce_side.png`](blocks/spruce_side.png) | 32×32 |
+| Ель | Торец | [`blocks/spruce_top.png`](blocks/spruce_top.png) | 32×32 |
+| Еловая хвоя | Все стороны | [`blocks/spruce_leaves.png`](blocks/spruce_leaves.png) | 32×32 |
+| Берёзовая листва | Все стороны | [`blocks/birch_leaves.png`](blocks/birch_leaves.png) | 32×32 |
+| Редстоуновая руда | Все стороны | [`blocks/redstone_ore.png`](blocks/redstone_ore.png) | 32×32 |
+| Лазуритовая руда | Все стороны | [`blocks/lapis_ore.png`](blocks/lapis_ore.png) | 32×32 |
+| Лёд | Все стороны (прозрачность берётся из PNG) | [`blocks/ice.png`](blocks/ice.png) | 32×32 |
+| Глина | Все стороны | [`blocks/clay.png`](blocks/clay.png) | 32×32 |
+| Динамит | Бок | [`blocks/tnt_side.png`](blocks/tnt_side.png) | 32×32 |
+| Динамит | Верх | [`blocks/tnt_top.png`](blocks/tnt_top.png) | 32×32 |
+| Динамит | Низ | [`blocks/tnt_bottom.png`](blocks/tnt_bottom.png) | 32×32 |
+| Лава | Поверхность | [`blocks/lava.png`](blocks/lava.png) | 32×32 |
+| Снег | Снег | [`blocks/snow.png`](blocks/snow.png) | 32×32 |
+| Снег | Бок травы под снегом | [`blocks/grass_snow.png`](blocks/grass_snow.png) | 32×32 |
+| Пашня | Верх | [`blocks/farmland.png`](blocks/farmland.png) | 32×32 |
+| Железная дверь | Верх и низ | [`blocks/iron_door.png`](blocks/iron_door.png) | 32×64 |
+| Каменная плита | Верх | [`blocks/stone_slab_top.png`](blocks/stone_slab_top.png) | 32×32 |
+| Каменная плита | Бок | [`blocks/stone_slab_side.png`](blocks/stone_slab_side.png) | 32×32 |
+| Факел | Картинка (палка — столбцы 7–8 по центру) | [`blocks/torch.png`](blocks/torch.png) | 32×32 |
+| Лестница | Картинка | [`blocks/ladder.png`](blocks/ladder.png) | 32×32 |
+| Огонь | Картинка | [`blocks/fire.png`](blocks/fire.png) | 32×32 |
+| Роза | Картинка | [`blocks/rose.png`](blocks/rose.png) | 32×32 |
+| Одуванчик | Картинка | [`blocks/dandelion.png`](blocks/dandelion.png) | 32×32 |
+| Красный гриб | Картинка | [`blocks/mushroom_red.png`](blocks/mushroom_red.png) | 32×32 |
+| Коричневый гриб | Картинка | [`blocks/mushroom_brown.png`](blocks/mushroom_brown.png) | 32×32 |
+| Сахарный тростник | Картинка | [`blocks/sugar_cane.png`](blocks/sugar_cane.png) | 32×32 |
+| Цветная шерсть | light_gray | [`blocks/wool_light_gray.png`](blocks/wool_light_gray.png) | 32×32 |
+| Цветная шерсть | gray | [`blocks/wool_gray.png`](blocks/wool_gray.png) | 32×32 |
+| Цветная шерсть | brown | [`blocks/wool_brown.png`](blocks/wool_brown.png) | 32×32 |
+| Цветная шерсть | red | [`blocks/wool_red.png`](blocks/wool_red.png) | 32×32 |
+| Цветная шерсть | yellow | [`blocks/wool_yellow.png`](blocks/wool_yellow.png) | 32×32 |
+| Цветная шерсть | green | [`blocks/wool_green.png`](blocks/wool_green.png) | 32×32 |
+| Цветная шерсть | lime | [`blocks/wool_lime.png`](blocks/wool_lime.png) | 32×32 |
+| Цветная шерсть | cyan | [`blocks/wool_cyan.png`](blocks/wool_cyan.png) | 32×32 |
+| Цветная шерсть | light_blue | [`blocks/wool_light_blue.png`](blocks/wool_light_blue.png) | 32×32 |
+| Цветная шерсть | blue | [`blocks/wool_blue.png`](blocks/wool_blue.png) | 32×32 |
+| Цветная шерсть | purple | [`blocks/wool_purple.png`](blocks/wool_purple.png) | 32×32 |
+| Цветная шерсть | pink | [`blocks/wool_pink.png`](blocks/wool_pink.png) | 32×32 |
+| Цветная шерсть | black | [`blocks/wool_black.png`](blocks/wool_black.png) | 32×32 |
+| Цветная шерсть | magenta | [`blocks/wool_magenta.png`](blocks/wool_magenta.png) | 32×32 |
+| Цветная шерсть | orange | [`blocks/wool_orange.png`](blocks/wool_orange.png) | 32×32 |
 
 ## Предметы
 
@@ -112,3 +160,4 @@
 | Алмазный топор | [`items/diamond_axe.png`](items/diamond_axe.png) | 32×32 |
 | Алмазная лопата | [`items/diamond_shovel.png`](items/diamond_shovel.png) | 32×32 |
 | Алмазный меч | [`items/diamond_sword.png`](items/diamond_sword.png) | 32×32 |
+| Камера | [`items/camera.png`](items/camera.png) | 32×32 |

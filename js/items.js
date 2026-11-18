@@ -20,6 +20,7 @@
   item(I.MUTTON, 'Жареная баранина', 'mutton_cooked', { food: 6 });
   item(I.CHICKEN_RAW, 'Сырая курятина', 'chicken_raw', { food: 2 });
   item(I.CHICKEN, 'Жареная курятина', 'chicken_cooked', { food: 6 });
+  item(I.CAMERA, 'Камера', 'camera', { stack: 1 }); // ставится на землю и пока ничего не делает
 
   // Инструменты: id = TOOL + материал*4 + тип
   const MATS = [
@@ -44,10 +45,11 @@
   }));
 
   // Топливо из блоков (секунды горения) и плавка
-  const BLOCK_FUEL = { [B.LOG]: 15, [B.BIRCH]: 15, [B.PLANKS]: 15, [B.CRAFTING]: 15, [B.CHEST]: 15, [B.OAK_STAIRS]: 15, [B.DOOR]: 10, [B.TRAPDOOR]: 15 };
+  const BLOCK_FUEL = { [B.LOG]: 15, [B.BIRCH]: 15, [B.SPRUCE]: 15, [B.PLANKS]: 15, [B.CRAFTING]: 15, [B.CHEST]: 15, [B.OAK_STAIRS]: 15,
+    [B.DOOR]: 10, [B.TRAPDOOR]: 15, [B.WOOD_SLAB]: 7, [B.LADDER]: 15 };
   const SMELT = {
     [B.IRON_ORE]: I.IRON_INGOT, [B.GOLD_ORE]: I.GOLD_INGOT, [B.SAND]: B.GLASS, [B.COBBLE]: B.STONE,
-    [B.LOG]: I.COAL, [B.BIRCH]: I.COAL,
+    [B.LOG]: I.COAL, [B.BIRCH]: I.COAL, [B.SPRUCE]: I.COAL, [B.CLAY]: B.BRICKS,
     [I.PORK_RAW]: I.PORK, [I.BEEF_RAW]: I.BEEF, [I.MUTTON_RAW]: I.MUTTON, [I.CHICKEN_RAW]: I.CHICKEN,
   };
   const SMELT_TIME = 10;
@@ -57,6 +59,9 @@
   const RECIPES = [
     { out: [B.PLANKS, 4], in: [[B.LOG, 1]] },
     { out: [B.PLANKS, 4], in: [[B.BIRCH, 1]] },
+    { out: [B.PLANKS, 4], in: [[B.SPRUCE, 1]] },
+    { out: [B.TORCH, 4], in: [[I.COAL, 1], [I.STICK, 1]] },
+    { out: [B.SANDSTONE, 1], in: [[B.SAND, 4]] },
     { out: [I.STICK, 4], in: [[B.PLANKS, 2]] },
     { out: [B.CRAFTING, 1], in: [[B.PLANKS, 4]] },
   ];
@@ -71,6 +76,17 @@
     { out: [B.TRAPDOOR, 2], in: [[B.PLANKS, 6]], table: true },
     { out: [B.OAK_STAIRS, 4], in: [[B.PLANKS, 6]], table: true },
     { out: [B.COBBLE_STAIRS, 4], in: [[B.COBBLE, 6]], table: true },
+    { out: [B.STONE_SLAB, 6], in: [[B.STONE, 3]], table: true },
+    { out: [B.LADDER, 3], in: [[I.STICK, 7]], table: true },
+    { out: [B.GOLD_BLOCK, 1], in: [[I.GOLD_INGOT, 9]], table: true },
+    { out: [B.IRON_BLOCK, 1], in: [[I.IRON_INGOT, 9]], table: true },
+    { out: [B.DIAMOND_BLOCK, 1], in: [[I.DIAMOND, 9]], table: true },
+    { out: [I.GOLD_INGOT, 9], in: [[B.GOLD_BLOCK, 1]] },
+    { out: [I.IRON_INGOT, 9], in: [[B.IRON_BLOCK, 1]] },
+    { out: [I.DIAMOND, 9], in: [[B.DIAMOND_BLOCK, 1]] },
+    { out: [B.WOOL_C + 4, 1], in: [[B.WOOL, 1], [B.DANDELION, 1]] }, // жёлтая
+    { out: [B.WOOL_C + 9, 1], in: [[B.WOOL, 1], [B.ROSE, 1]] },      // синяя (роза в этой версии синяя)
+    { out: [I.CAMERA, 1], in: [[I.IRON_INGOT, 3], [B.GLASS, 1]], table: true },
   );
 
   // ---------- Свойства ----------
@@ -81,7 +97,8 @@
   const tool = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].tool || null : null);
   const food = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].food || 0 : 0);
   const fuel = (id) => (isBlock(id) ? BLOCK_FUEL[id] || 0 : (ITEMS[id] && ITEMS[id].fuel) || 0);
-  const sprite = (id) => (isBlock(id) ? null : ITEMS[id].tile);
+  // Плоская картинка предмета (растения, факел, лестница тоже показываются картинкой); null — объёмный блок
+  const sprite = (id) => (isBlock(id) ? (BLOCKS[id].itemTile === undefined ? null : BLOCKS[id].itemTile) : ITEMS[id].tile);
 
   // Как блок выглядит в руке, на земле и на иконке
   function itemShape(id) {
@@ -89,6 +106,8 @@
     if (b.kind === 'stairs') return { boxes: BLOCKS[id + 1].boxes, tex: b.tex };
     if (b.kind === 'trapdoor') return { boxes: [[0, 0.4, 0, 1, 0.4 + 3 / 16, 1]], tex: b.tex };
     if (b.kind === 'door') return { boxes: [[0.1, 0, 0.42, 0.9, 1, 0.58]], tex: b.tex };
+    if (b.kind === 'slab') return { boxes: [[0, 0.25, 0, 1, 0.75, 1]], tex: b.tex };
+    if (b.kind === 'snow') return { boxes: [[0, 0.4, 0, 1, 0.4 + 2 / 16, 1]], tex: b.tex };
     if (b.kind === 'bed') {
       // целая кровать: изголовье (z от -1 до 0) и ноги (z от 0 до 1), ужатые в куб
       const half = (bid, dz) => { const h = BLOCKS[bid]; return { boxes: h.boxes, tex: h.tex, uvx: h.uvx, map: (p) => [0.5 + (p[0] - 0.5) * 0.62, 0.3 + p[1] * 0.62, 0.5 + (p[2] + dz) * 0.62] }; };
@@ -107,11 +126,17 @@
   }
 
   // ---------- Каталог творческого режима ----------
-  const CATALOG = [B.GRASS, B.DIRT, B.STONE, B.COBBLE, B.GRAVEL, B.SAND, B.BEDROCK,
-    B.LOG, B.BIRCH, B.PLANKS, B.LEAVES, B.GLASS, B.BRICKS, B.WOOL,
-    B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE,
-    B.OAK_STAIRS, B.COBBLE_STAIRS, B.DOOR, B.TRAPDOOR, B.CRAFTING, B.FURNACE, B.CHEST, B.BED,
+  const WOOL_C = []; for (let i = 0; i < 12; i++) WOOL_C.push(B.WOOL_C + i); // 12 цветов есть в каталоге, 3 — нет
+  const CATALOG = [B.STONE, B.COBBLE, B.DIRT, B.SAND, B.SANDSTONE, B.GRAVEL, B.PLANKS, B.LOG, B.BIRCH, B.GLASS, B.BRICKS, B.OBSIDIAN,
+    B.GOLD_BLOCK, B.IRON_BLOCK, B.DIAMOND_BLOCK, B.LEAVES, B.BIRCH_LEAVES, B.SPRUCE_LEAVES, B.STONE_SLAB,
+    B.WOOL, ...WOOL_C,
+    B.ROSE, B.DANDELION, B.RED_MUSHROOM, B.BROWN_MUSHROOM, B.SUGAR_CANE,
+    B.OAK_STAIRS, B.COBBLE_STAIRS, B.DOOR, B.TRAPDOOR, B.LADDER, B.TORCH, B.CRAFTING, B.FURNACE, B.CHEST, B.BED,
     ...Object.keys(ITEMS).map(Number)];
+  // Недобываемые: в оригинальной версии их нельзя было взять из инвентаря — здесь у них отдельная вкладка
+  const EXTRA = [B.GRASS, B.BEDROCK, B.SPRUCE, B.COAL_ORE, B.IRON_ORE, B.GOLD_ORE, B.DIAMOND_ORE, B.REDSTONE_ORE, B.LAPIS_ORE,
+    B.ICE, B.CLAY, B.TNT, B.WATER, B.LAVA, B.SNOW, B.FARMLAND, B.IRON_DOOR, B.WOOD_SLAB, B.COBBLE_SLAB, B.SANDSTONE_SLAB,
+    B.INV_BEDROCK, B.WOOL_C + 12, B.WOOL_C + 13, B.WOOL_C + 14, B.FIRE];
 
   // ---------- Иконки ----------
   const icons = {};
@@ -120,10 +145,12 @@
     canvas.width = canvas.height = 64;
     let r = null;
     try { r = new CM.Renderer(canvas, true); } catch (e) { r = null; }
-    for (const id of CATALOG) {
-      if (!isBlock(id)) { icons[id] = spriteIcon(ITEMS[id].tile); continue; }
+    for (const id of CATALOG.concat(EXTRA)) {
+      if (sprite(id) !== null) { icons[id] = spriteIcon(sprite(id)); continue; }
       const b = BLOCKS[id];
-      if (b.kind === 'door') { icons[id] = doorIcon(); continue; }
+      if (b.kind === 'door') { icons[id] = doorIcon(b.iron ? T.iron_door_top : T.door_top, b.iron ? T.iron_door_bottom : T.door_bottom); continue; }
+      if (b.render === 'none') { icons[id] = r ? r.drawIcon({ boxes: CM.FULL_BOX, tex: [T.grass_top, T.grass_top, T.grass_top] }) : ''; continue; }
+      if (b.fluid) { icons[id] = r ? r.drawIcon({ boxes: CM.FULL_BOX, tex: b.tex }) : ''; continue; }
       const sh = itemShape(id);
       icons[id] = r ? r.drawIcon(sh) : CM.Textures.blockIcon(b.tex, 64);
     }
@@ -142,15 +169,15 @@
     return c.toDataURL();
   }
   // Дверь в инвентаре — плоская картинка из двух половинок
-  function doorIcon() {
+  function doorIcon(top, bottom) {
     const c = document.createElement('canvas');
     c.width = c.height = 64;
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
     const a = CM.Textures.atlas, TS = CM.Textures.tile, per = CM.Textures.perRow;
     const draw = (tile, y) => g.drawImage(a, (tile % per) * TS, Math.floor(tile / per) * TS, TS, TS, 16, y, 32, 32);
-    draw(T.door_top, 0);
-    draw(T.door_bottom, 32);
+    draw(top, 0);
+    draw(bottom, 32);
     return c.toDataURL();
   }
   function icon(id) { return icons[id] || ''; }
@@ -217,12 +244,12 @@
 
     static creativeDefault() {
       const inv = new Inventory();
-      [B.STONE, B.COBBLE, B.PLANKS, B.GLASS, B.DOOR, B.CRAFTING, B.FURNACE, B.CHEST, B.BED]
+      [B.STONE, B.COBBLE, B.PLANKS, B.GLASS, B.TORCH, B.DOOR, B.CRAFTING, B.CHEST, B.BED]
         .forEach((id, i) => { inv.slots[i] = { id, count: 1 }; });
       return inv;
     }
   }
 
-  CM.Items = { CATALOG, MAX_STACK, RECIPES, SMELT, SMELT_TIME, ITEMS, isBlock, name, maxStack, tool, food, fuel, sprite,
+  CM.Items = { CATALOG, EXTRA, MAX_STACK, RECIPES, SMELT, SMELT_TIME, ITEMS, isBlock, name, maxStack, tool, food, fuel, sprite,
     itemShape, mining, icon, buildIcons, moveSlot, toolId, Inventory };
 })(window.CM);

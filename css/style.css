@@ -531,3 +531,20 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 .pause-sens b { min-width: 4.5em; text-align: center; color: #fff; }
 .pause-sens b::after { content: '%'; }
 #btn-view.on { background: rgba(70,120,50,0.7); }
+
+/* ---- Сетевая игра ---- */
+#labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.name-tag { position: absolute; left: 0; top: 0; padding: 3px 6px; background: rgba(0,0,0,0.45); color: #fff; font-size: clamp(8px, 1.8vmin, 12px); white-space: nowrap; will-change: transform; }
+.ip-row { max-width: 720px; width: 100%; }
+.ip-row input { flex: 1; min-width: 0; font-family: var(--font); font-size: clamp(10px, 2.2vmin, 14px); color: #fff; background: #000; border: 3px solid #a0a0a0; padding: 10px; outline: none; user-select: text; -webkit-user-select: text; }
+
+/* ---- Пауза: кнопки в две колонки, чтобы всё влезало на низком экране ---- */
+#screen-pause .menu-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(6px, 1.6vmin, 12px); width: min(92vw, 640px); }
+#screen-pause .menu-buttons .btn { min-width: 0; width: 100%; }
+#screen-pause .menu-buttons .btn.big { grid-column: 1 / -1; }
+#screen-pause .menu-buttons .btn.hidden { display: none; }
+@media (max-height: 420px) {
+  #screen-pause .panel-title { margin-bottom: 2px; }
+  #screen-pause .pause-info { line-height: 1.5; }
+  .pause-sens { margin: 2px 0 6px; }
+}

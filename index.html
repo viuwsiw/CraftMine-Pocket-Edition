@@ -18,10 +18,10 @@
     <div class="logo-wrap">
       <h1 class="logo">CraftMine</h1>
       <div class="subtitle">Pocket Edition</div>
-      <div class="version-top">v0.1.0 alpha build 1</div>
+      <div class="version-top">v0.1.0 alpha build 2</div>
     </div>
     <div class="tiles">
-      <button class="tile locked" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""><span class="tile-badge">скоро</span></button>
+      <button class="tile" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""></button>
       <button class="tile" id="btn-play"><span class="tile-label">Играть</span><img class="tile-icon" id="icon-play" alt=""></button>
       <button class="tile" id="btn-settings"><span class="tile-label">Настройки</span><img class="tile-icon" id="icon-settings" alt=""></button>
     </div>
@@ -35,6 +35,20 @@
     <div class="row-buttons">
       <button class="btn" id="btn-worlds-back">Назад</button>
       <button class="btn green" id="btn-new-world">Создать новый</button>
+    </div>
+  </section>
+
+  <!-- Мультиплеер: игры в этой Wi-Fi сети -->
+  <section id="screen-multi" class="screen dirt-bg hidden">
+    <div class="panel-title">Игра по Wi-Fi</div>
+    <div class="tex-help" id="multi-status"></div>
+    <div class="worlds-list" id="multi-list"></div>
+    <div class="row-buttons ip-row">
+      <input id="multi-ip" type="text" maxlength="40" placeholder="IP хозяина, например 192.168.1.5" autocomplete="off" spellcheck="false">
+      <button class="btn" id="btn-multi-ip">Подключиться</button>
+    </div>
+    <div class="row-buttons">
+      <button class="btn" id="btn-multi-back">Назад</button>
     </div>
   </section>
 
@@ -96,6 +110,8 @@
       <label class="check"><input id="set-autojump" type="checkbox"> Автопрыжок</label>
       <label class="check"><input id="set-falldmg" type="checkbox"> Урон от падения</label>
       <label class="check"><input id="set-coords" type="checkbox"> Показывать координаты и FPS</label>
+      <label class="check"><input id="set-fancy" type="checkbox"> Красивая графика (листва с просветами)</label>
+      <label class="check"><input id="set-lowq" type="checkbox"> Пониженное качество графики (для слабых телефонов)</label>
     </div>
     <div class="row-buttons">
       <button class="btn" id="btn-textures">Текстуры</button>
@@ -133,6 +149,7 @@
       <div class="hotbar-row"><div id="hotbar"></div><button id="btn-inv" aria-label="Инвентарь"><i></i><i></i><i></i></button></div>
     </div>
     <div id="debug" class="hidden"></div>
+    <div id="labels"></div>
     <button id="btn-pause" aria-label="Пауза"><i></i><i></i></button>
     <button id="btn-view" aria-label="Вид от третьего лица"><svg viewBox="0 0 16 16"><circle cx="8" cy="4.2" r="2.6"/><rect x="4.5" y="7.6" width="7" height="7" rx="1"/></svg></button>
     <div id="sleep"></div>
@@ -153,6 +170,7 @@
   <section id="screen-pause" class="screen dim-bg hidden">
     <div class="panel-title">Игра на паузе</div>
     <div class="pause-info" id="pause-info"></div>
+    <div class="pause-info" id="net-info"></div>
     <div class="stepper pause-sens">
       <span>Чувствительность</span>
       <button class="btn sbtn" data-sens="-10">−</button>
@@ -162,6 +180,8 @@
     <div class="menu-buttons">
       <button class="btn big" id="btn-resume">Продолжить</button>
       <button class="btn" id="btn-pause-settings">Настройки</button>
+      <button class="btn" id="btn-host">Открыть по Wi-Fi</button>
+      <button class="btn hidden" id="btn-copy-world">Скопировать мир</button>
       <button class="btn" id="btn-quit">Сохранить и выйти</button>
     </div>
   </section>
