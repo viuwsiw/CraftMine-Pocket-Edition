@@ -99,6 +99,10 @@
       this.regen = 0;
       this.onHurt = null;
       this.burnTimer = 0;     // урон от лавы и огня раз в полсекунды
+      this.food = 20;         // голод: 10 окорочков
+      this.saturation = 5;    // насыщение: тратится раньше голода
+      this.exhaustion = 0;    // усталость: каждые 4 единицы — минус единица насыщения или голода
+      this.foodTimer = 0;
       this.inLava = false;
       this.onLadder = false;
     }
@@ -191,7 +195,7 @@
         else if (input.down) v[1] = 0;
         else v[1] = Math.max(v[1] - GRAVITY * dt, -2.2);
       } else {
-        if (input.jump && this.onGround) v[1] = JUMP_V;
+        if (input.jump && this.onGround) { v[1] = JUMP_V; this.exhaustion += 0.1; }
         v[1] -= GRAVITY * dt;
         if (v[1] < -50) v[1] = -50;
       }
@@ -260,9 +264,35 @@
       }
       // Покачивание камеры при ходьбе
       const hs = Math.hypot(v[0], v[2]);
+      if (!this.flying) this.exhaustion += hs * dt * (this.inWater ? 0.05 : 0.03); // ходьба и плавание утомляют
+      this.updateHunger(dt);
       this.walk = (this.walk || 0) + dt * Math.min(hs, 6) * 2.2; // фаза шага для модели (и в полёте, и в воде)
       if (this.onGround && hs > 0.5) this.bob += dt * hs * 2.2;
       else this.bob *= Math.pow(0.02, dt);
+    }
+
+    // Голод: полный (9+ окорочков) — лечит, пустой — отнимает здоровье (не ниже полсердца)
+    updateHunger(dt) {
+      if (this.invulnerable || this.health <= 0) return;
+      while (this.exhaustion >= 4) {
+        this.exhaustion -= 4;
+        if (this.saturation > 0) this.saturation = Math.max(0, this.saturation - 1);
+        else this.food = Math.max(0, this.food - 1);
+      }
+      this.foodTimer += dt;
+      if (this.food >= 18 && this.health < 20) {
+        if (this.foodTimer >= 4) { this.foodTimer = 0; this.health = Math.min(20, this.health + 1); this.exhaustion += 1.5; }
+      } else if (this.food <= 0) {
+        if (this.foodTimer >= 4) { this.foodTimer = 0; if (this.health > 1) this.hurt(1); }
+      } else this.foodTimer = Math.min(this.foodTimer, 4);
+    }
+
+    // Съесть еду: food — сколько единиц голода восстанавливает
+    eat(food) {
+      if (this.food >= 20) return false;
+      this.food = Math.min(20, this.food + food);
+      this.saturation = Math.min(this.food, this.saturation + food * 0.6);
+      return true;
     }
 
     camera() {

@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 3';
+  const VERSION = '0.1.0 alpha build 4';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -229,7 +229,8 @@
     { name: 'Растения', icon: () => iconOf(Bk.ROSE), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && BL[id].plant) },
     { name: 'Мебель и детали', icon: () => iconOf(Bk.DOOR), ids: Items.CATALOG.filter((id) => Items.isBlock(id) && BL[id].kind) },
     { name: 'Инструменты', icon: () => iconOf(Items.toolId(2, 3)), ids: Items.CATALOG.filter((id) => Items.tool(id)) },
-    { name: 'Материалы и еда', icon: () => iconOf(CM.I.BEEF), ids: Items.CATALOG.filter((id) => !Items.isBlock(id) && !Items.tool(id)) },
+    { name: 'Материалы и еда', icon: () => iconOf(CM.I.BEEF), ids: Items.CATALOG.filter((id) => !Items.isBlock(id) && !Items.tool(id) && !Items.egg(id)) },
+    { name: 'Яйца призыва', icon: () => iconOf(CM.I.EGG + 6), ids: Items.CATALOG.filter((id) => Items.egg(id)) },
     { name: 'Недобываемые блоки', icon: () => iconOf(Bk.TNT), ids: Items.EXTRA },
   ];
   const RCATS = [
@@ -450,6 +451,21 @@
   const heartHalf = P(HEART.map((r) => r.slice(0, 4).replace(/b/g, 'b') + r.slice(4).replace(/[ab]/g, 'c')), { '#': '#2a0a0a', a: '#ffb3b3', b: '#e0262b', c: '#4a2222' }, 2);
   for (let i = 0; i < 10; i++) $('hearts').appendChild(document.createElement('i'));
   let shownHealth = -1;
+  // Шкала голода: окорочка справа налево
+  const SHANK = ['.....###.', '....#aab#', '...#abbb#', '..#abbbc#', '..#bbbc#.', '.#bbcc#..', '#dd##....', '#d#......', '.#.......'];
+  const foodFull = P(SHANK, { '#': '#2a1406', a: '#f0b878', b: '#c8742e', c: '#8a4a1a', d: '#f4f0e4' }, 2);
+  const foodEmpty = P(SHANK, { '#': '#2a1406', a: '#3a2a1e', b: '#3a2a1e', c: '#3a2a1e', d: '#4a4038' }, 2);
+  const foodHalf = P(SHANK.map((r) => r.slice(0, 4).replace(/[abcd]/g, 'e') + r.slice(4)), { '#': '#2a1406', a: '#f0b878', b: '#c8742e', c: '#8a4a1a', d: '#f4f0e4', e: '#3a2a1e' }, 2);
+  for (let i = 0; i < 10; i++) $('hunger').appendChild(document.createElement('i'));
+  let shownFood = -1;
+  function renderHunger(f) {
+    if (f === shownFood) return;
+    shownFood = f;
+    $('hunger').querySelectorAll('i').forEach((el, i) => {
+      const v = f - i * 2;
+      el.style.backgroundImage = `url(${v >= 2 ? foodFull : v === 1 ? foodHalf : foodEmpty})`;
+    });
+  }
   function renderHearts(hp) {
     if (hp === shownHealth) return;
     shownHealth = hp;
@@ -673,7 +689,9 @@
     player.pos = [sp.x, sp.y, sp.z];
     player.vel = [0, 0, 0];
     player.health = 20;
+    player.food = 20; player.saturation = 5; player.exhaustion = 0;
     player.fallTop = null;
+    shownFood = -1;
     savePlayer();
     resume();
   });
@@ -760,12 +778,15 @@
     player.canFly = creative;
     selected = 0;
     renderHotbar();
-    $('hearts').style.visibility = creative ? 'hidden' : 'visible';
+    $('stats').style.visibility = creative ? 'hidden' : 'visible';
+    shownFood = -1;
     if (rec.player) {
       player.pos = [rec.player.x, rec.player.y, rec.player.z];
       player.yaw = rec.player.yaw || 0;
       player.pitch = rec.player.pitch || 0;
       player.health = rec.player.health || 20;
+      player.food = rec.player.food === undefined ? 20 : rec.player.food;
+      player.saturation = rec.player.sat === undefined ? 5 : rec.player.sat;
       player.flying = creative && !!rec.player.flying;
       player.needsGround = false;
       // мир из старой версии: ландшафт сгенерирован заново — ставим игрока на землю рядом с прежним местом
@@ -794,7 +815,7 @@
 
   function savePlayer() {
     if (!current || !player || player.needsGround || current.temp) return;
-    current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: player.flying };
+    current.player = { x: player.pos[0], y: player.pos[1], z: player.pos[2], yaw: player.yaw, pitch: player.pitch, health: player.health, flying: player.flying, food: player.food, sat: player.saturation };
     current.inventory = inv.toJSON();
     current.mode = creative ? 'creative' : 'survival';
     current.time = time;
@@ -877,6 +898,7 @@
     if (mh && (!hit || mh.t < hit.t)) {
       const t = Items.tool(held);
       ents.hitMob(mh.mob, t ? t.dmg : 1, player.pos);
+      player.exhaustion += 0.2;
       swing = 1;
       wearTool();
       return;
@@ -892,11 +914,20 @@
     }
     const heal = Items.food(held);
     if (heal) {
-      if (creative || player.health >= 20) return;
-      player.health = Math.min(20, player.health + heal);
+      if (creative || !player.eat(heal)) return;
       inv.takeOne(selected);
       swing = 1;
       selectSlot(selected);
+      return;
+    }
+    // Яйцо призыва: моб появляется там, куда тапнули
+    const eggMob = Items.egg(held);
+    if (eggMob && hit) {
+      const sx = hit.x + hit.n[0] + 0.5, sy = hit.y + hit.n[1] + 0.01, sz = hit.z + hit.n[2] + 0.5;
+      const m = ents.spawnMob(eggMob, [sx, sy, sz]);
+      m.yaw = player.yaw + Math.PI;
+      if (!creative) { inv.takeOne(selected); selectSlot(selected); }
+      swing = 1;
       return;
     }
     // Камера: ставится на верх блока и стоит на треноге
@@ -1009,6 +1040,16 @@
     });
   }
 
+  // Моб ударил игрока: урон и отбрасывание
+  function hurtPlayer(dmg, from) {
+    if (creative || player.health <= 0) return;
+    player.hurt(dmg);
+    const dx = player.pos[0] - from[0], dz = player.pos[2] - from[2], l = Math.hypot(dx, dz) || 1;
+    player.vel[0] += dx / l * 5; player.vel[2] += dz / l * 5; player.vel[1] = Math.max(player.vel[1], 4);
+  }
+  // Ночь для мобов — когда солнце заметно ниже горизонта
+  function mobNight() { const s = Math.sin((creative ? 0.2 : time) * Math.PI * 2); return s < -0.15; }
+
   // ---------- Динамит ----------
   const fuses = [];
   function ignite(x, y, z, delay) {
@@ -1025,9 +1066,9 @@
       if (world.getBlock(f.x, f.y, f.z) === Bk.TNT) explode(f.x, f.y, f.z);
     }
   }
-  function explode(cx, cy, cz) {
-    world.setBlock(cx, cy, cz, Bk.AIR);
-    const R = 3.3;
+  function explode(cx, cy, cz, power) {
+    if (world.getBlock(cx, cy, cz) === Bk.TNT) world.setBlock(cx, cy, cz, Bk.AIR);
+    const R = power || 3.3;
     for (let dy = -4; dy <= 4; dy++) for (let dz = -4; dz <= 4; dz++) for (let dx = -4; dx <= 4; dx++) {
       const d = Math.hypot(dx, dy, dz);
       if (d > R + Math.random() * 0.8 - 0.4) continue;
@@ -1070,7 +1111,7 @@
         if (isFinite(m.time)) {
           breaking.progress += dt / m.time;
           extras.crack = { x: hit.x, y: hit.y, z: hit.z, bounds: hit.bounds, stage: Math.min(3, Math.floor(breaking.progress * 4)) };
-          if (breaking.progress >= 1) { breakBlock(hit, m.drops); wearTool(); breaking = null; extras.crack = null; }
+          if (breaking.progress >= 1) { breakBlock(hit, m.drops); wearTool(); player.exhaustion += 0.03; breaking = null; extras.crack = null; }
         }
       }
       if (swing <= 0) swing = 1;
@@ -1380,6 +1421,7 @@
         if (!settings.fallDamage && player.health < hpBefore) player.health = hpBefore;
       }
       renderHearts(player.health);
+      renderHunger(player.food);
       $('dpad').classList.toggle('flying', player.flying);
       if (player.health <= 0 && !creative) {
         // вещи остаются на месте гибели
@@ -1411,7 +1453,9 @@
 
     // Мир живёт, пока открыт инвентарь: животные, предметы, печи, время суток
     if (state === 'game' || state === 'inventory') {
-      ents.update(dt, { player, R, onPickup, spawn: !net.client });
+      ents.update(dt, { player, R, onPickup, spawn: !net.client, hostile: !creative && !net.client, creative, night: mobNight(),
+        hurtPlayer, explode: (m) => explode(Math.floor(m.pos[0]), Math.floor(m.pos[1] + 0.5), Math.floor(m.pos[2]), 3),
+        shoot: (m, t) => ents.shoot(m, t) });
       tickFurnaces(dt);
       tickFuses(dt);
       world.tick(dt);
@@ -1441,7 +1485,7 @@
       else hand.shape = Items.itemShape(held);
       extras.hand = hand;
     }
-    extras.meshes = [{ verts: new Float32Array(m.normal) }, { verts: new Float32Array(m.hurt), tint: [1, 0.45, 0.45] }];
+    extras.meshes = [{ verts: new Float32Array(m.normal) }, { verts: new Float32Array(m.hurt), tint: [1, 0.45, 0.45] }, { verts: new Float32Array(m.flash), tint: [2.2, 2.2, 2.2] }];
     renderer.render(world, cam, R, thirdPerson ? false : player.headInLava ? 'lava' : player.headInWater, extras);
   }
 

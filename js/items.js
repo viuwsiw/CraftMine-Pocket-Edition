@@ -21,6 +21,15 @@
   item(I.CHICKEN_RAW, 'Сырая курятина', 'chicken_raw', { food: 2 });
   item(I.CHICKEN, 'Жареная курятина', 'chicken_cooked', { food: 6 });
   item(I.CAMERA, 'Камера', 'camera', { stack: 1 }); // ставится на землю и пока ничего не делает
+  item(I.ROTTEN_FLESH, 'Гнилая плоть', 'rotten_flesh', { food: 4 });
+  item(I.GUNPOWDER, 'Порох', 'gunpowder');
+  item(I.STRING, 'Нить', 'string');
+  item(I.BONE, 'Кость', 'bone');
+  item(I.ARROW, 'Стрела', 'arrow');
+  // Яйца призыва: тап по блоку — появляется моб
+  const EGG_MOBS = ['pig', 'cow', 'sheep', 'chicken', 'zombie', 'skeleton', 'creeper', 'spider'];
+  const EGG_NAMES = ['свиньи', 'коровы', 'овцы', 'курицы', 'зомби', 'скелета', 'крипера', 'паука'];
+  EGG_MOBS.forEach((m, i) => item(I.EGG + i, 'Яйцо призыва ' + EGG_NAMES[i], 'egg_' + m, { egg: m }));
 
   // Инструменты: id = TOOL + материал*4 + тип
   const MATS = [
@@ -87,6 +96,8 @@
     { out: [B.WOOL_C + 4, 1], in: [[B.WOOL, 1], [B.DANDELION, 1]] }, // жёлтая
     { out: [B.WOOL_C + 9, 1], in: [[B.WOOL, 1], [B.ROSE, 1]] },      // синяя (роза в этой версии синяя)
     { out: [I.CAMERA, 1], in: [[I.IRON_INGOT, 3], [B.GLASS, 1]], table: true },
+    { out: [B.TNT, 1], in: [[I.GUNPOWDER, 5], [B.SAND, 4]], table: true },
+    { out: [B.WOOL, 1], in: [[I.STRING, 4]] },
   );
 
   // ---------- Свойства ----------
@@ -96,6 +107,7 @@
   const maxStack = (id) => (isBlock(id) ? MAX_STACK : ITEMS[id].stack);
   const tool = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].tool || null : null);
   const food = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].food || 0 : 0);
+  const egg = (id) => (!isBlock(id) && ITEMS[id] ? ITEMS[id].egg || null : null);
   const fuel = (id) => (isBlock(id) ? BLOCK_FUEL[id] || 0 : (ITEMS[id] && ITEMS[id].fuel) || 0);
   // Плоская картинка предмета (растения, факел, лестница тоже показываются картинкой); null — объёмный блок
   const sprite = (id) => (isBlock(id) ? (BLOCKS[id].itemTile === undefined ? null : BLOCKS[id].itemTile) : ITEMS[id].tile);
@@ -250,6 +262,6 @@
     }
   }
 
-  CM.Items = { CATALOG, EXTRA, MAX_STACK, RECIPES, SMELT, SMELT_TIME, ITEMS, isBlock, name, maxStack, tool, food, fuel, sprite,
+  CM.Items = { CATALOG, EXTRA, MAX_STACK, RECIPES, SMELT, SMELT_TIME, ITEMS, isBlock, name, maxStack, tool, food, fuel, sprite, egg,
     itemShape, mining, icon, buildIcons, moveSlot, toolId, Inventory };
 })(window.CM);

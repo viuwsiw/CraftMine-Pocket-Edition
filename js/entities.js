@@ -39,6 +39,40 @@
       { c: [0, 15, 0], s: [8, 6, 5], t: all(T.wool_black), head: true, pivot: [0, 13, 0] },
       { c: [0, 15, -3], s: [3, 3, 2], t: all(T.wool_light_blue), head: true, pivot: [0, 13, 0] },
     ] },
+    // Враждебные мобы (свой рисунок). pose — постоянный наклон детали вперёд, roll — наклон вбок (ноги паука)
+    zombie: { scale: 1.9 / 32, parts: [
+      { c: [-2, 6, 0], s: [4, 12, 4], t: all(T.zombie_leg), pivot: [-2, 12, 0], swing: 1 },
+      { c: [2, 6, 0], s: [4, 12, 4], t: all(T.zombie_leg), pivot: [2, 12, 0], swing: -1 },
+      { c: [0, 18, 0], s: [8, 12, 4], t: all(T.zombie_body) },
+      { c: [-6, 18, 0], s: [4, 12, 4], t: [T.zombie_arm, T.zombie_arm, T.zombie_body, T.zombie_head, T.zombie_arm, T.zombie_arm], pivot: [-6, 22, 0], swing: 0.3, pose: 1.45 },
+      { c: [6, 18, 0], s: [4, 12, 4], t: [T.zombie_arm, T.zombie_arm, T.zombie_body, T.zombie_head, T.zombie_arm, T.zombie_arm], pivot: [6, 22, 0], swing: -0.3, pose: 1.45 },
+      { c: [0, 28, 0], s: [8, 8, 8], t: [T.zombie_head, T.zombie_head, T.zombie_head, T.zombie_head, T.zombie_head, T.zombie_face], pivot: [0, 24, 0], head: true },
+    ] },
+    skeleton: { scale: 1.9 / 32, parts: [
+      { c: [-2, 6, 0], s: [2, 12, 2], t: all(T.skel_limb), pivot: [-2, 12, 0], swing: 1 },
+      { c: [2, 6, 0], s: [2, 12, 2], t: all(T.skel_limb), pivot: [2, 12, 0], swing: -1 },
+      { c: [0, 18, 0], s: [8, 12, 4], t: [T.skel_limb, T.skel_limb, T.skel_limb, T.skel_limb, T.skel_body, T.skel_body] },
+      { c: [-5, 18, 0], s: [2, 12, 2], t: all(T.skel_limb), pivot: [-5, 22, 0], swing: 0.2, pose: 1.4 },
+      { c: [5, 18, 0], s: [2, 12, 2], t: all(T.skel_limb), pivot: [5, 22, 0], swing: -0.2, pose: 1.55 },
+      { c: [0, 28, 0], s: [8, 8, 8], t: [T.skel_head, T.skel_head, T.skel_head, T.skel_head, T.skel_head, T.skel_face], pivot: [0, 24, 0], head: true },
+    ] },
+    creeper: { scale: 1 / 16, parts: [
+      { c: [-2, 3, -4], s: [4, 6, 4], t: all(T.creeper_foot), pivot: [-2, 6, -4], swing: 1 },
+      { c: [2, 3, -4], s: [4, 6, 4], t: all(T.creeper_foot), pivot: [2, 6, -4], swing: -1 },
+      { c: [-2, 3, 4], s: [4, 6, 4], t: all(T.creeper_foot), pivot: [-2, 6, 4], swing: -1 },
+      { c: [2, 3, 4], s: [4, 6, 4], t: all(T.creeper_foot), pivot: [2, 6, 4], swing: 1 },
+      { c: [0, 12, 0], s: [8, 12, 4], t: all(T.creeper_body) },
+      { c: [0, 22, 0], s: [8, 8, 8], t: [T.creeper_head, T.creeper_head, T.creeper_head, T.creeper_head, T.creeper_head, T.creeper_face], pivot: [0, 18, 0], head: true },
+    ] },
+    spider: { scale: 1 / 16, parts: [
+      { c: [0, 9, 0], s: [6, 6, 6], t: all(T.spider_body) },
+      { c: [0, 10, 8], s: [10, 8, 12], t: all(T.spider_body) },
+      { c: [0, 9, -7], s: [8, 8, 8], t: [T.spider_body, T.spider_body, T.spider_body, T.spider_body, T.spider_body, T.spider_face], pivot: [0, 9, -3], head: true },
+      ...[-3, -1, 1, 3].flatMap((z, i) => [
+        { c: [-10, 9, z * 1.4], s: [14, 2, 2], t: all(T.spider_leg), pivot: [-3, 9, z * 1.4], roll: 0.55, swing: i % 2 ? 0.25 : -0.25 },
+        { c: [10, 9, z * 1.4], s: [14, 2, 2], t: all(T.spider_leg), pivot: [3, 9, z * 1.4], roll: -0.55, swing: i % 2 ? -0.25 : 0.25 },
+      ]),
+    ] },
     player: { scale: 1.8 / 32, parts: [
       { c: [-2, 6, 0], s: [4, 12, 4], t: all(T.pl_leg), pivot: [-2, 12, 0], swing: 1 },
       { c: [2, 6, 0], s: [4, 12, 4], t: all(T.pl_leg), pivot: [2, 12, 0], swing: -1 },
@@ -51,16 +85,23 @@
 
   // Добавить вершины модели в массив out. anim: {swing (рад), headPitch (рад), armSwing (рад, правая рука)}
   function buildModel(out, name, x, y, z, yaw, anim, light) {
-    const m = MODELS[name], sc = m.scale;
+    const m = MODELS[name], sc = m.scale * (anim.scale || 1);
     const cy = Math.cos(yaw), sy = Math.sin(yaw);
     for (const p of m.parts) {
       let a = 0;
       if (p.head) a = anim.headPitch || 0;
       else if (p.swing) a = p.swing * (anim.swing || 0);
       if (p.arm === 'R' && anim.armSwing) a = anim.armSwing;
+      if (p.pose) a += p.pose;
       const ca = Math.cos(a), sa = Math.sin(a), pv = p.pivot;
+      const cr = p.roll ? Math.cos(p.roll) : 1, sr = p.roll ? Math.sin(p.roll) : 0;
       const xf = (q) => {
         let qx = q[0], qy = q[1], qz = q[2];
+        if (sr) {
+          const rx = qx - pv[0], ry0 = qy - pv[1];
+          qx = pv[0] + rx * cr - ry0 * sr;
+          qy = pv[1] + rx * sr + ry0 * cr;
+        }
         if (a !== 0) {
           const ry = qy - pv[1], rz = qz - pv[2];
           qy = pv[1] + ry * ca - rz * sa;
@@ -91,8 +132,14 @@
     sheep: { hw: 0.45, h: 1.3, hp: 8, speed: 1.0, drops: [[I.MUTTON_RAW, 1, 1], [B.WOOL, 1, 1]] },
     chicken: { hw: 0.2, h: 0.7, hp: 4, speed: 0.8, drops: [[I.CHICKEN_RAW, 1, 1]] },
     camera: { hw: 0.3, h: 1.1, hp: 1, speed: 0, drops: [[I.CAMERA, 1, 1]], still: true },
+    // Враждебные: нападают ночью и в темноте пещер (паук днём мирный, пока его не ударят)
+    zombie: { hw: 0.3, h: 1.9, hp: 20, speed: 1.1, hostile: true, dmg: 3, burns: true, drops: [[I.ROTTEN_FLESH, 0, 2]] },
+    skeleton: { hw: 0.3, h: 1.9, hp: 20, speed: 1.2, hostile: true, ranged: true, burns: true, drops: [[I.BONE, 0, 2], [I.ARROW, 0, 2]] },
+    creeper: { hw: 0.3, h: 1.7, hp: 20, speed: 1.1, hostile: true, explode: true, drops: [[I.GUNPOWDER, 0, 2]] },
+    spider: { hw: 0.65, h: 0.9, hp: 16, speed: 1.6, hostile: true, dmg: 2, climb: true, neutralDay: true, drops: [[I.STRING, 0, 2]] },
   };
-  const MOB_TYPES = Object.keys(MOB).filter((k) => !MOB[k].still); // сами появляются только животные
+  const HOSTILE = ['zombie', 'zombie', 'zombie', 'skeleton', 'skeleton', 'creeper', 'creeper', 'spider', 'spider'];
+  const MOB_TYPES = Object.keys(MOB).filter((k) => !MOB[k].still && !MOB[k].hostile); // днём сами появляются животные
   const wrap = (a) => { while (a > Math.PI) a -= 2 * Math.PI; while (a < -Math.PI) a += 2 * Math.PI; return a; };
 
   class Mob extends CM.Body {
@@ -112,12 +159,14 @@
       this.headPitch = 0;
     }
 
-    ai(dt, world) {
-      const p = this.pos, v = this.vel;
+    ai(dt, world, ctx) {
+      const p = this.pos, v = this.vel, d = this.def;
       this.hurtTime = Math.max(0, this.hurtTime - dt);
-      if (this.def.still) { v[0] *= 0.5; v[2] *= 0.5; this.simpleMove(dt, world, 0.5); return; }
-      let speed = this.def.speed;
-      if (this.panic > 0) {
+      if (d.still) { v[0] *= 0.5; v[2] *= 0.5; this.simpleMove(dt, world, 0.5); return; }
+      let speed = d.speed, chase = false;
+      if (d.hostile && ctx) chase = this.hostileAi(dt, world, ctx);
+      if (chase) speed *= this.flee ? -1.1 : 1.35;
+      else if (this.panic > 0 && !d.hostile) {
         // Испуг: бежит и часто меняет направление
         this.panic -= dt; this.panicTurn -= dt;
         this.moving = true; speed *= 2.3;
@@ -134,8 +183,8 @@
       this.yaw += wrap(this.yawTarget - this.yaw) * Math.min(1, dt * 5);
       const dx = -Math.sin(this.yaw), dz = -Math.cos(this.yaw);
 
-      // Не идти в воду и с обрыва
-      if (this.moving && this.onGround) {
+      // Не идти в воду и с обрыва (кроме погони)
+      if (this.moving && this.onGround && !chase) {
         const ax = Math.floor(p[0] + dx * (this.hw + 0.6)), az = Math.floor(p[2] + dz * (this.hw + 0.6)), ay = Math.floor(p[1] + 0.1);
         let ground = false, water = CM.FLUID[world.getBlock(ax, ay, az)] > 0;
         for (let k = 1; k <= 3 && !ground; k++) {
@@ -147,16 +196,59 @@
       }
 
       const tx = this.moving ? dx * speed : 0, tz = this.moving ? dz * speed : 0;
+      if (chase && this.flee) this.moving = true;
       const k = Math.min(1, dt * 8);
       v[0] += (tx - v[0]) * k; v[2] += (tz - v[2]) * k;
       if (this.type === 'chicken' && v[1] < -2) v[1] = -2; // курица планирует
       const hit = this.simpleMove(dt, world, 1.6);
       if (hit && this.moving) {
-        if (this.onGround) v[1] = 7.6; // запрыгнуть на блок
+        if (d.climb) v[1] = 3.2;           // паук лезет по стене
+        else if (this.onGround) v[1] = 7.6; // запрыгнуть на блок
         this.blocked += dt;
         if (this.blocked > 1.2) { this.yawTarget = this.yaw + Math.PI * (0.5 + Math.random()); this.blocked = 0; }
       } else this.blocked = Math.max(0, this.blocked - dt);
       this.walk += Math.hypot(v[0], v[2]) * dt * 7;
+    }
+
+    // Враждебный моб: погоня, удар, выстрел, взрыв, горение на солнце. Возвращает true, если преследует игрока
+    hostileAi(dt, world, ctx) {
+      const d = this.def, p = this.pos, pl = ctx.player;
+      this.attackCd = Math.max(0, (this.attackCd || 0) - dt);
+      // Зомби и скелеты горят на солнце, если над ними открытое небо
+      if (d.burns && !ctx.night) {
+        this.sunT = (this.sunT || 0) + dt;
+        if (this.sunT > 1) {
+          this.sunT = 0;
+          let open = !this.inWater;
+          for (let y = Math.floor(p[1] + d.h); y < CM.H && open; y++) if (CM.OPAQUE[world.getBlock(Math.floor(p[0]), y, Math.floor(p[2]))]) open = false;
+          if (open) { this.health -= 2; this.hurtTime = 0.3; }
+        }
+      }
+      const dx = pl.pos[0] - p[0], dz = pl.pos[2] - p[2], dy = pl.pos[1] - p[1], dist = Math.hypot(dx, dz);
+      let aggro = !ctx.creative && pl.health > 0 && dist < 16 && Math.abs(dy) < 8;
+      if (d.neutralDay && !ctx.night && !this.angry) aggro = false;
+      this.flee = false;
+      if (!aggro) { if (this.fuse) this.fuse = Math.max(0, this.fuse - dt); return false; }
+      this.yawTarget = Math.atan2(-dx, -dz);
+      this.moving = true;
+      this.headPitch = 0;
+      if (d.ranged) {
+        // скелет держит дистанцию и стреляет
+        if (dist < 5) this.flee = true;
+        else if (dist < 11) this.moving = false;
+        if (this.attackCd <= 0 && dist < 15) { ctx.shoot(this, pl); this.attackCd = 1.8 + Math.random() * 0.8; }
+      } else if (d.explode) {
+        // крипер подходит вплотную, шипит и взрывается; если отойти — успокаивается
+        if (dist < 3 && Math.abs(dy) < 3) {
+          this.moving = false;
+          this.fuse = (this.fuse || 0) + dt;
+          if (this.fuse >= 1.5) { ctx.explode(this); this.health = 0; this.exploded = true; }
+        } else if (this.fuse) this.fuse = Math.max(0, this.fuse - dt * (dist > 7 ? 2 : 0.5));
+      } else if (d.dmg && dist < d.hw + 0.9 && Math.abs(dy) < 1.6 && this.attackCd <= 0) {
+        ctx.hurtPlayer(d.dmg, p);
+        this.attackCd = 1;
+      }
+      return true;
     }
   }
 
@@ -196,14 +288,55 @@
     hitMob(m, dmg, from) {
       m.health -= dmg;
       m.hurtTime = 0.4;
-      m.panic = 4; m.panicTurn = 0;
+      if (m.def.hostile) m.angry = true; else { m.panic = 4; m.panicTurn = 0; }
       const dx = m.pos[0] - from[0], dz = m.pos[2] - from[2], l = Math.hypot(dx, dz) || 1;
       m.vel[0] += dx / l * 6; m.vel[2] += dz / l * 6; m.vel[1] = 4.5;
-      m.yawTarget = Math.atan2(-dx, -dz);
-      if (m.health <= 0) {
-        for (const [id, a, b] of m.def.drops) this.drop(id, a + Math.floor(Math.random() * (b - a + 1)), undefined, [m.pos[0], m.pos[1] + 0.4, m.pos[2]]);
-        this.mobs.splice(this.mobs.indexOf(m), 1);
+      if (!m.def.hostile) m.yawTarget = Math.atan2(-dx, -dz);
+      if (m.health <= 0) this.kill(m);
+    }
+
+    kill(m) {
+      const i = this.mobs.indexOf(m);
+      if (i < 0) return;
+      this.mobs.splice(i, 1);
+      if (m.exploded) return;
+      for (const [id, a, b] of m.def.drops) this.drop(id, a + Math.floor(Math.random() * (b - a + 1)), undefined, [m.pos[0], m.pos[1] + 0.4, m.pos[2]]);
+    }
+
+    spawnMob(type, pos) { const m = new Mob(type, pos); this.mobs.push(m); return m; }
+
+    // Враждебные мобы: ночью на поверхности, в любое время — в тёмных пещерах
+    _trySpawnHostile(player, night) {
+      const w = this.world;
+      const a = Math.random() * Math.PI * 2, dist = 18 + Math.random() * 22;
+      const x = Math.floor(player.pos[0] + Math.cos(a) * dist), z = Math.floor(player.pos[2] + Math.sin(a) * dist);
+      if (!w.isLoadedAt(x, z)) return;
+      const surf = w.surfaceHeight(x, z), spots = [];
+      let covered = false;
+      for (let y = CM.H - 2; y > 1; y--) {
+        const id = w.getBlock(x, y, z);
+        if (CM.OPAQUE[id]) {
+          const up = w.getBlock(x, y + 1, z), up2 = w.getBlock(x, y + 2, z);
+          if (up === B.AIR && up2 === B.AIR && ((night && !covered) || (covered && y < surf - 6))) spots.push(y + 1);
+          covered = true;
+        }
       }
+      if (!spots.length) return;
+      const y = spots[Math.floor(Math.random() * spots.length)];
+      const type = HOSTILE[Math.floor(Math.random() * HOSTILE.length)];
+      const pd = Math.hypot(x + 0.5 - player.pos[0], y - player.pos[1], z + 0.5 - player.pos[2]);
+      if (pd < 16) return;
+      this.mobs.push(new Mob(type, [x + 0.5, y + 0.01, z + 0.5]));
+    }
+
+    // Стрела скелета: летит по дуге в игрока
+    shoot(m, target) {
+      const o = [m.pos[0], m.pos[1] + 1.5, m.pos[2]];
+      const t = [target.pos[0], target.pos[1] + 1.1, target.pos[2]];
+      const dx = t[0] - o[0], dz = t[2] - o[2], dist = Math.hypot(dx, dz), sp = 16, time = dist / sp;
+      const vy = (t[1] - o[1]) / time + 0.5 * 20 * time;
+      const k = sp / (dist || 1), err = 0.06 * dist;
+      (this.arrows || (this.arrows = [])).push({ pos: o, vel: [dx * k + (Math.random() - 0.5) * err, vy, dz * k + (Math.random() - 0.5) * err], age: 0, stuck: false });
     }
 
     _trySpawn(player, R) {
@@ -254,7 +387,32 @@
         const m = this.mobs[i];
         const dx = m.pos[0] - pl.pos[0], dz = m.pos[2] - pl.pos[2];
         if ((dx * dx + dz * dz > far * far && !m.def.still) || m.pos[1] < -10) { this.mobs.splice(i, 1); continue; }
-        if (w.isLoadedAt(m.pos[0], m.pos[2])) m.ai(dt, w);
+        if (m.def.hostile && dx * dx + dz * dz > 72 * 72) { this.mobs.splice(i, 1); continue; }
+        if (w.isLoadedAt(m.pos[0], m.pos[2])) m.ai(dt, w, ctx);
+        if (m.health <= 0) this.kill(m);
+      }
+      // Враждебные мобы появляются только в выживании
+      if (ctx.hostile) {
+        this.hostileTimer = (this.hostileTimer || 0) - dt;
+        if (this.hostileTimer <= 0) {
+          this.hostileTimer = 1.2;
+          if (this.mobs.filter((m) => m.def.hostile).length < 10) this._trySpawnHostile(pl, ctx.night);
+        }
+      }
+      // Стрелы
+      for (let i = (this.arrows || []).length - 1; i >= 0; i--) {
+        const ar = this.arrows[i];
+        ar.age += dt;
+        if (ar.age > (ar.stuck ? 6 : 8)) { this.arrows.splice(i, 1); continue; }
+        if (ar.stuck) continue;
+        ar.vel[1] -= 20 * dt;
+        for (let a = 0; a < 3; a++) ar.pos[a] += ar.vel[a] * dt;
+        if (CM.SOLID[w.getBlock(Math.floor(ar.pos[0]), Math.floor(ar.pos[1]), Math.floor(ar.pos[2]))]) { ar.stuck = true; ar.age = 0; continue; }
+        const px = ar.pos[0] - pl.pos[0], pz = ar.pos[2] - pl.pos[2], py = ar.pos[1] - pl.pos[1];
+        if (Math.abs(px) < 0.45 && Math.abs(pz) < 0.45 && py > 0 && py < 1.9) {
+          ctx.hurtPlayer(3, [ar.pos[0] - ar.vel[0], ar.pos[1], ar.pos[2] - ar.vel[2]]);
+          this.arrows.splice(i, 1);
+        }
       }
       this.spawnTimer -= dt;
       if (this.spawnTimer <= 0) {
@@ -265,10 +423,22 @@
 
     // Меши для отрисовки: обычные и «раненые» (красный оттенок)
     meshes() {
-      const normal = [], hurt = [];
+      const normal = [], hurt = [], flash = [];
       for (const m of this.mobs) {
         const swing = Math.sin(m.walk) * 0.7 * Math.min(1, Math.hypot(m.vel[0], m.vel[2]) * 1.5);
-        buildModel(m.hurtTime > 0 ? hurt : normal, m.type, m.pos[0], m.pos[1], m.pos[2], m.yaw, { swing, headPitch: m.headPitch }, 1);
+        const fuse = m.fuse || 0, blink = fuse > 0 && Math.floor(fuse * 8) % 2 === 0;
+        const list = m.hurtTime > 0 ? hurt : blink ? flash : normal;
+        buildModel(list, m.type, m.pos[0], m.pos[1], m.pos[2], m.yaw, { swing, headPitch: m.headPitch, scale: 1 + fuse * 0.12 }, 1);
+      }
+      // стрелы: тонкая палочка вдоль скорости
+      for (const ar of this.arrows || []) {
+        const v = ar.vel, yaw = Math.atan2(v[0], v[2]), pitch = Math.atan2(v[1], Math.hypot(v[0], v[2]));
+        const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+        const xf = (q) => {
+          const y1 = q[1] * cp + q[2] * sp, z1 = -q[1] * sp + q[2] * cp;
+          return [ar.pos[0] + q[0] * cy + z1 * sy, ar.pos[1] + y1, ar.pos[2] - q[0] * sy + z1 * cy];
+        };
+        Geo.partVerts(normal, [0, 0, -0.25], [0.06, 0.06, 0.5], all(T.spruce_side), xf, 1);
       }
       // Другие игроки в сетевой игре
       for (const r of this.remote || []) {
@@ -288,7 +458,7 @@
         else v = Geo.spriteVerts(CM.Items.sprite(it.id), xf, 1);
         for (let k = 0; k < v.length; k++) normal.push(v[k]);
       }
-      return { normal, hurt };
+      return { normal, hurt, flash };
     }
   }
 

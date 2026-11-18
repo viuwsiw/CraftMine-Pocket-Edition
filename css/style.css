@@ -307,7 +307,7 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 .slot img { width: 74%; height: 74%; image-rendering: pixelated; pointer-events: none; }
 .slot .cnt { position: absolute; right: 3px; bottom: 1px; font-size: 8px; color: #fff; text-shadow: 1px 1px 0 #000; pointer-events: none; }
 .slot.sel { border: 3px solid #f4f4f4; box-shadow: 0 0 0 2px #111, inset 0 0 0 2px #555; background: rgba(255,255,255,0.12); }
-:root { --slot-heart: clamp(10px, 2.6vmin, 15px); }
+:root { --slot-heart: clamp(13px, 3.5vmin, 21px); }
 
 #hurt { position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(255,0,0,0) 40%, rgba(200,0,0,0.55) 100%); opacity: 0; pointer-events: none; transition: opacity 0.5s; }
 #hurt.on { opacity: 1; transition: none; }
@@ -472,7 +472,7 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 .inv-x:active, .inv-tab:active { filter: brightness(0.85); }
 
 /* При открытом инвентаре от HUD остаётся только панель быстрого доступа */
-#hud.inv-open #hearts, #hud.inv-open #item-name, #hud.inv-open #dpad, #hud.inv-open #btn-pause, #hud.inv-open #btn-view { display: none; }
+#hud.inv-open #stats, #hud.inv-open #item-name, #hud.inv-open #dpad, #hud.inv-open #btn-pause, #hud.inv-open #btn-view { display: none; }
 #hud.inv-open #bottom-bar { z-index: 12; }
 
 /* Печь */
@@ -549,3 +549,9 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
   .pause-sens { margin: 2px 0 6px; }
 }
 .stepper .sval { flex: 1; text-align: center; font-size: clamp(12px, 2.6vmin, 18px); color: #ffe066; }
+
+/* ---- Сердца и голод над панелью ---- */
+#stats { display: flex; justify-content: space-between; align-self: stretch; gap: 8px; }
+#hearts, #hunger { display: flex; gap: 1px; }
+#hunger { flex-direction: row-reverse; }
+#hunger i { width: var(--slot-heart); height: var(--slot-heart); background-size: 100% 100%; image-rendering: pixelated; }
