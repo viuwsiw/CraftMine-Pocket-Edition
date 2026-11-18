@@ -176,5 +176,5 @@
     return { refreshAll: () => cards.forEach((r) => r()) };
   }
 
-  CM.TexPack = { loadSaved, buildUI, resetAll };
+  CM.TexPack = { loadSaved, buildUI, resetAll, entries: () => ({ blocks: BLOCKS, items: itemEntries() }) };
 })(window.CM);
