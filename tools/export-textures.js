@@ -20,6 +20,7 @@ const COMBINED = {
   door: { tiles: ['door_top', 'door_bottom'], w: 1, h: 2 },
   bed_top: { tiles: ['bed_top_head', 'bed_top_foot'], w: 1, h: 2 },
   bed_side: { tiles: ['bed_side_head', 'bed_side_foot'], w: 2, h: 1 },
+  bed_end: { tiles: ['bed_end_head', 'bed_end_foot'], w: 2, h: 1 },
 };
 const MISC = ['outline', 'crack_0', 'crack_1', 'crack_2', 'crack_3', 'sun', 'moon', 'furnace_front_on'];
 

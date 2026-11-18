@@ -89,7 +89,11 @@
     if (b.kind === 'stairs') return { boxes: BLOCKS[id + 1].boxes, tex: b.tex };
     if (b.kind === 'trapdoor') return { boxes: [[0, 0.4, 0, 1, 0.4 + 3 / 16, 1]], tex: b.tex };
     if (b.kind === 'door') return { boxes: [[0.1, 0, 0.42, 0.9, 1, 0.58]], tex: b.tex };
-    if (b.kind === 'bed') return { boxes: [[0, 0.2, 0, 1, 0.2 + 9 / 16, 1]], tex: BLOCKS[id + 4].tex };
+    if (b.kind === 'bed') {
+      // целая кровать: изголовье (z от -1 до 0) и ноги (z от 0 до 1), ужатые в куб
+      const half = (bid, dz) => { const h = BLOCKS[bid]; return { boxes: h.boxes, tex: h.tex, uvx: h.uvx, map: (p) => [0.5 + (p[0] - 0.5) * 0.62, 0.3 + p[1] * 0.62, 0.5 + (p[2] + dz) * 0.62] }; };
+      return { parts: [half(id + 4, -1), half(id, 0)] };
+    }
     return { boxes: CM.FULL_BOX, tex: b.tex };
   }
 
@@ -121,7 +125,7 @@
       const b = BLOCKS[id];
       if (b.kind === 'door') { icons[id] = doorIcon(); continue; }
       const sh = itemShape(id);
-      icons[id] = r ? r.drawIcon(sh.boxes, sh.tex) : CM.Textures.blockIcon(b.tex, 64);
+      icons[id] = r ? r.drawIcon(sh) : CM.Textures.blockIcon(b.tex, 64);
     }
     if (r) {
       const ext = r.gl.getExtension('WEBGL_lose_context');

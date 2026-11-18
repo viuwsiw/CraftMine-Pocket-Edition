@@ -21,7 +21,10 @@ echo "[2/6] Ресурсы и манифест (aapt)"
 aapt package -f -M AndroidManifest.xml -S res -A $B/assets -I "$ANDROID_JAR" -F $B/unsigned.apk
 
 echo "[3/6] Компиляция Java"
-javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 -bootclasspath "$ANDROID_JAR" -d $B/classes $(find src -name '*.java')
+# заглушки новых классов Android (stubs/) нужны только компилятору и в DEX не попадают
+mkdir -p $B/stubs
+javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 -bootclasspath "$ANDROID_JAR" -d $B/stubs $(find stubs -name '*.java')
+javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 -bootclasspath "$ANDROID_JAR" -classpath $B/stubs -d $B/classes $(find src -name '*.java')
 
 echo "[4/6] DEX"
 dalvik-exchange --dex --min-sdk-version=21 --output=$B/classes.dex $B/classes

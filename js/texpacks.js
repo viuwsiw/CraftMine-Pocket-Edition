@@ -14,6 +14,7 @@
     'blocks/door.png': { tiles: ['door_top', 'door_bottom'], w: 1, h: 2 },
     'blocks/bed_top.png': { tiles: ['bed_top_head', 'bed_top_foot'], w: 1, h: 2 },
     'blocks/bed_side.png': { tiles: ['bed_side_head', 'bed_side_foot'], w: 2, h: 1 },
+    'blocks/bed_end.png': { tiles: ['bed_end_head', 'bed_end_foot'], w: 2, h: 1 },
   };
   const tileName = {};
   for (const n in TILES) tileName[TILES[n]] = n;
@@ -112,7 +113,7 @@
     { name: 'Сундук', faces: [F('Перед', 'chest_front'), F('Бок', 'chest_side'), F('Верх', 'chest_top')] },
     { name: 'Дверь', faces: [F('Верх и низ', ['door_top', 'door_bottom'], 1, 2)] },
     { name: 'Люк', faces: [F('Все стороны', 'trapdoor')] },
-    { name: 'Кровать', faces: [F('Верх: изголовье и ноги', ['bed_top_head', 'bed_top_foot'], 1, 2), F('Бок: изголовье и ноги', ['bed_side_head', 'bed_side_foot'], 2, 1)] },
+    { name: 'Кровать', faces: [F('Верх: изголовье и ноги', ['bed_top_head', 'bed_top_foot'], 1, 2), F('Бок: изголовье и ноги', ['bed_side_head', 'bed_side_foot'], 2, 1), F('Торцы: изголовье и ноги', ['bed_end_head', 'bed_end_foot'], 2, 1)] },
   ];
   function itemEntries() {
     return CM.Items.CATALOG.filter((id) => !CM.Items.isBlock(id)).map((id) => {

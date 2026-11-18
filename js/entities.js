@@ -269,7 +269,7 @@
           return [it.pos[0] + x * ca + z * sa, by + y, it.pos[2] - x * sa + z * ca];
         };
         let v;
-        if (block) { const sh = CM.Items.itemShape(it.id); v = Geo.shapeVerts(sh.boxes, sh.tex, xf, 1); }
+        if (block) v = Geo.itemVerts(CM.Items.itemShape(it.id), xf, 1);
         else v = Geo.spriteVerts(CM.Items.sprite(it.id), xf, 1);
         for (let k = 0; k < v.length; k++) normal.push(v[k]);
       }

@@ -375,6 +375,19 @@ for y in range(7, N):
             else: continue
         side.putpixel((x, y), BE[v])
 T['bed_side'] = side
+# Торцы кровати (32x16): слева изголовье, справа ноги
+end = Image.new('RGBA', (32, N), (0, 0, 0, 0))
+for y in range(7, N):
+    for x in range(32):
+        lx, head = x % 16, x < 16
+        if y <= 9: v = (3 if head else 1) if y > 7 else (4 if head else 2)
+        elif y <= 11: v = 7 if y == 10 else 6
+        else:
+            if lx in (0, 1, 2, 13, 14, 15): v = 6
+            else: continue
+        if y <= 9 and lx in (0, 15): v = 5 if head else 0
+        end.putpixel((x, y), BE[v])
+T['bed_end'] = end
 
 
 # ---------- Предметы и инструменты ----------

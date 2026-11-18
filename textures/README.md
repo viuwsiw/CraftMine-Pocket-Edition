@@ -73,6 +73,7 @@
 | Люк | Все стороны | [`blocks/trapdoor.png`](blocks/trapdoor.png) | 32×32 |
 | Кровать | Верх: изголовье и ноги | [`blocks/bed_top.png`](blocks/bed_top.png) | 32×64 |
 | Кровать | Бок: изголовье и ноги | [`blocks/bed_side.png`](blocks/bed_side.png) | 64×32 |
+| Кровать | Торцы: изголовье и ноги | [`blocks/bed_end.png`](blocks/bed_end.png) | 64×32 |
 
 ## Предметы
 

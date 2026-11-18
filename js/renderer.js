@@ -98,16 +98,18 @@ void main() {
   // Вершины куба; tex — [верх, низ, бок]; xf — преобразование точки [0,1]^3
   // Вершины набора коробок (каждая [x0,y0,z0,x1,y1,z1] в [0,1]^3); tex — [верх, низ, бок];
   // xf — преобразование точки; UV берутся по координатам грани, как в мире
-  function shapeVerts(boxes, tex, xf, light) {
+  function shapeVerts(boxes, tex, xf, light, uvx) {
     const out = new Float32Array(boxes.length * 36 * 6);
     let o = 0;
     CUBE.forEach((f, fi) => {
       const [u0, v0, st] = tileUV(tex.length === 6 ? tex[fi] : tex[f.slot]);
+      const ux = uvx ? uvx[fi] : 0;
       for (const b of boxes) {
         const vs = f.c.map((c) => {
           const p = [c[0] ? b[3] : b[0], c[1] ? b[4] : b[1], c[2] ? b[5] : b[2]];
           let tu, tv;
           if (fi < 2) { tu = p[2]; tv = 1 - p[1]; } else if (fi < 4) { tu = p[0]; tv = p[2]; } else { tu = p[0]; tv = 1 - p[1]; }
+          if (ux) [tu, tv] = CM.uvXform(ux, tu, tv);
           const q = xf(p);
           return [q[0], q[1], q[2], u0 + tu * st, v0 + tv * st, f.shade * light];
         });
@@ -117,6 +119,15 @@ void main() {
     return out;
   }
   function cubeVerts(tex, xf, light) { return shapeVerts([[0, 0, 0, 1, 1, 1]], tex, xf, light); }
+  // Предмет-блок (Items.itemShape): одна форма или несколько частей (кровать из двух половинок)
+  function itemVerts(sh, xf, light) {
+    if (!sh.parts) return shapeVerts(sh.boxes, sh.tex, xf, light, sh.uvx);
+    const vs = sh.parts.map((pt) => shapeVerts(pt.boxes, pt.tex, (p) => xf(pt.map(p)), light, pt.uvx));
+    const out = new Float32Array(vs.reduce((n, v) => n + v.length, 0));
+    let o = 0;
+    for (const v of vs) { out.set(v, o); o += v.length; }
+    return out;
+  }
 
   // Деталь модели: коробка с центром c и размером sz, на каждую грань — целый тайл.
   // tiles: [+X, -X, верх, низ, +Z (зад), -Z (перёд)]; xf — преобразование точки; пишет в массив out
@@ -183,7 +194,7 @@ void main() {
     return [x, y, z];
   }
 
-  CM.Geo = { shapeVerts, partVerts, tileUV, spriteVerts, rotate, clearSpriteCache: () => spriteCache.clear() };
+  CM.Geo = { shapeVerts, itemVerts, partVerts, tileUV, spriteVerts, rotate, clearSpriteCache: () => spriteCache.clear() };
 
   class Renderer {
     constructor(canvas, iconMode) {
@@ -304,14 +315,16 @@ void main() {
         rot = [['x', 2.3 - sw2 * 0.6], ['z', 0.5 + sw * 0.25], ['y', 0.5 - sw * 0.45]];
         pos = [0.6 - sw * 0.2, -0.6 + sw2 * 0.1, -0.85 - sw * 0.12];
       } else if (sprite) {
-        // инструмент: рукоять у правого нижнего угла, рабочая часть смотрит вверх и вперёд
+        // инструмент, как в Minecraft: рукоять в правом нижнем углу, предмет почти вертикально
+        // с лёгким наклоном к центру, рабочая часть справа сверху; взмах — рубящее движение вперёд-вниз
         scale = [0.85, 0.85, 0.85];
-        rot = [['z', -0.2], ['y', 2.3 - sw * 0.5], ['x', -0.05 + sw2 * 0.9]];
-        pos = [0.6 - sw * 0.22, -0.4 - sw * 0.18, -0.95 - sw * 0.15];
+        rot = [['z', 0.95 + sw * 0.25], ['y', -0.9 + sw * 0.35], ['x', -0.25 - sw2 * 1.1]];
+        pos = [0.66 - sw * 0.22, -0.44 - sw * 0.12, -1.0 - sw * 0.12];
       } else {
         scale = [0.62, 0.62, 0.62];
         rot = [['y', 0.78 - sw * 0.45], ['x', 0.16 + sw * 0.7]];
         pos = [0.66 - sw * 0.25, -0.6 - sw * 0.12, -1.05 - sw * 0.2];
+        if (hand.shape && hand.shape.parts) { scale = [0.5, 0.5, 0.5]; pos[1] += 0.05; } // кровать длиннее блока
       }
       const tune = CM.handTune && CM.handTune[arm ? 'arm' : sprite ? 'sprite' : 'block']; // для подбора углов
       if (tune) { scale = tune.scale || scale; rot = tune.rot || rot; pos = (tune.pos || pos).slice(); }
@@ -326,7 +339,7 @@ void main() {
       let verts;
       if (arm) { const a = CM.TILES.pl_arm; verts = shapeVerts([[0, 0, 0, 1, 1, 1]], [a, a, CM.TILES.pl_body, CM.TILES.skin, a, a], xf, hand.light); }
       else if (sprite) verts = spriteVerts(hand.sprite, xf, hand.light);
-      else verts = shapeVerts(hand.boxes, hand.tex, xf, hand.light);
+      else verts = itemVerts(hand.shape, xf, hand.light);
       this._drawDynamic(verts, gl.TRIANGLES);
     }
 
@@ -362,7 +375,7 @@ void main() {
     }
 
     // Изометрическая иконка предмета (только для рендерера, созданного с iconMode)
-    drawIcon(boxes, tex) {
+    drawIcon(shape) {
       const gl = this.gl;
       const w = this.canvas.width, h = this.canvas.height;
       gl.viewport(0, 0, w, h);
@@ -385,7 +398,7 @@ void main() {
       gl.enable(gl.CULL_FACE);
       gl.enable(gl.DEPTH_TEST);
       gl.uniform1f(this.u.uAlphaTest, 0.5);
-      this._drawDynamic(shapeVerts(boxes, tex, xf, 1), gl.TRIANGLES);
+      this._drawDynamic(itemVerts(shape, xf, 1), gl.TRIANGLES);
       return this.canvas.toDataURL();
     }
 

@@ -87,10 +87,16 @@
     BLOCKS[B.CHEST + f] = { name: 'Сундук', solid: true, opaque: true, kind: 'chest', facing: f,
       tex: faced(T.chest_front, T.chest_side, T.chest_top, f), item: B.CHEST, hard: 2.5, tool: 'axe', level: 0 };
     // Кровать: две половинки, изголовье — дальняя от игрока
+    // Грани: верх повёрнут изголовьем к голове, бока зеркалятся так, чтобы ножки были на концах,
+    // на торцах — свои текстуры изголовья и ног. uvx: поворот UV (0..3) + 4 = зеркало по горизонтали
     for (let h = 0; h < 2; h++) {
-      const side = h ? T.bed_side_head : T.bed_side_foot;
+      const side = h ? T.bed_side_head : T.bed_side_foot, end = h ? T.bed_end_head : T.bed_end_foot;
+      const tex = [side, side, h ? T.bed_top_head : T.bed_top_foot, T.planks, side, side];
+      tex[DIRFACE[f]] = tex[DIRFACE[(f + 2) % 4]] = end;
+      const flip = f === 1 || f === 2 ? 4 : 0, uvx = [flip, flip, f, 0, flip, flip];
+      uvx[DIRFACE[f]] = uvx[DIRFACE[(f + 2) % 4]] = 0;
       BLOCKS[B.BED + f + 4 * h] = { name: 'Кровать', solid: true, opaque: false, kind: 'bed', facing: f, head: h,
-        tex: [h ? T.bed_top_head : T.bed_top_foot, T.planks, side], boxes: [[0, 0, 0, 1, 9 / 16, 1]], item: B.BED, hard: 0.2, tool: null, level: 0 };
+        tex, uvx, boxes: [[0, 0, 0, 1, 9 / 16, 1]], item: B.BED, hard: 0.2, tool: null, level: 0 };
     }
   }
   const FULL_BOX = [[0, 0, 0, 1, 1, 1]];
@@ -289,6 +295,12 @@
   let scratch = new Float32Array(6 * 6 * 20000);
 
   // Меш блока сложной формы: каждая коробка — 6 граней, без затенения
+  // Поворот/зеркало UV грани: c & 3 — четверти оборота, c & 4 — зеркало по горизонтали
+  function uvXform(c, tu, tv) {
+    if (c & 4) tu = 1 - tu;
+    for (let r = c & 3; r > 0; r--) { const t = tu; tu = tv; tv = 1 - t; }
+    return [tu, tv];
+  }
   function meshShape(blk, x, y, z, get, o) {
     const tileStep = 1 / CM.Textures.perRow, per = CM.Textures.perRow;
     const lp = [0, 0, 0], vx = new Float32Array(24);
@@ -298,13 +310,14 @@
         const F = FACES[f];
         const c = F.s > 0 ? hi[F.d] : lo[F.d];
         if ((F.s > 0 ? c === 1 : c === 0) && OPAQUE[get(x + F.n[0], y + F.n[1], z + F.n[2])]) continue;
-        const tile = blk.tex[F.texSlot];
+        const tile = blk.tex.length === 6 ? blk.tex[f] : blk.tex[F.texSlot], ux = blk.uvx ? blk.uvx[f] : 0;
         const u0 = (tile % per) * tileStep, v0 = Math.floor(tile / per) * tileStep;
         for (let k = 0; k < 4; k++) {
           const cu = F.corners[k][0], cv = F.corners[k][1];
           lp[F.d] = c; lp[F.u] = cu ? hi[F.u] : lo[F.u]; lp[F.v] = cv ? hi[F.v] : lo[F.v];
           let tu, tv;
           if (F.d === 1) { tu = lp[0]; tv = lp[2]; } else if (F.d === 0) { tu = lp[2]; tv = 1 - lp[1]; } else { tu = lp[0]; tv = 1 - lp[1]; }
+          if (ux) { const t = uvXform(ux, tu, tv); tu = t[0]; tv = t[1]; }
           const b = k * 6;
           vx[b] = x + lp[0]; vx[b + 1] = y + lp[1]; vx[b + 2] = z + lp[2];
           vx[b + 3] = u0 + UV_EPS + tu * (tileStep - 2 * UV_EPS);
@@ -668,6 +681,6 @@
   }
 
   CM.CS = CS; CM.H = H; CM.SEA = SEA;
-  CM.B = B; CM.BLOCKS = BLOCKS; CM.SOLID = SOLID; CM.OPAQUE = OPAQUE; CM.FULL_BOX = FULL_BOX; CM.I = I; CM.DIRVEC = DIRVEC;
+  CM.B = B; CM.BLOCKS = BLOCKS; CM.SOLID = SOLID; CM.OPAQUE = OPAQUE; CM.FULL_BOX = FULL_BOX; CM.I = I; CM.DIRVEC = DIRVEC; CM.uvXform = uvXform;
   CM.World = World;
 })(window.CM);

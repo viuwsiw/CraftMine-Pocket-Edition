@@ -6,6 +6,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.ValueCallback;
@@ -34,13 +35,19 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) { }
         }
 
+        createWebView();
+        hideSystemUi();
+    }
+
+    /** Создаёт WebView с игрой. Вызывается и заново, если система убила процесс отрисовки. */
+    private void createWebView() {
         web = new WebView(this);
         WebSettings s = web.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.0.3");
+        s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.1.0");
         // Выбор PNG-файла для своих текстур
         web.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -59,7 +66,20 @@ public class MainActivity extends Activity {
                 return true;
             }
         });
-        web.setWebViewClient(new WebViewClient());
+        web.setWebViewClient(new WebViewClient() {
+            // Android 8+: если процесс отрисовки WebView упал или его убила система (нехватка памяти),
+            // без этого обработчика закрывается всё приложение. Пересоздаём WebView и загружаем игру заново
+            // (мир сохраняется каждые 10 секунд и при сворачивании).
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                if (view != web) return true;
+                ViewGroup parent = (ViewGroup) web.getParent();
+                if (parent != null) parent.removeView(web);
+                web.destroy();
+                web = null;
+                createWebView();
+                return true;
+            }
+        });
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setVerticalScrollBarEnabled(false);
         web.setHorizontalScrollBarEnabled(false);
@@ -70,6 +90,7 @@ public class MainActivity extends Activity {
     }
 
     private void hideSystemUi() {
+        if (web == null) return;
         web.setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
                 | View.SYSTEM_UI_FLAG_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -98,6 +119,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (web == null) { finish(); return; }
         web.evaluateJavascript("window.CMBack ? CMBack() : false", new ValueCallback<String>() {
             @Override
             public void onReceiveValue(String handled) {
@@ -108,21 +130,23 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
-        web.evaluateJavascript("window.CMPause && CMPause()", null);
-        web.onPause();
+        if (web != null) {
+            web.evaluateJavascript("window.CMPause && CMPause()", null);
+            web.onPause();
+        }
         super.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        web.onResume();
+        if (web != null) web.onResume();
         hideSystemUi();
     }
 
     @Override
     protected void onDestroy() {
-        web.destroy();
+        if (web != null) web.destroy();
         super.onDestroy();
     }
 }

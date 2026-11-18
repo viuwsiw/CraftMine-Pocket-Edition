@@ -1,7 +1,7 @@
 'use strict';
-// CraftMine PE v0.0.3 alpha — экраны, игровой цикл
+// CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.0.3 alpha';
+  const VERSION = '0.1.0 alpha build 1';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -50,6 +50,27 @@
     $('error').classList.remove('hidden');
     return;
   }
+
+  // ---------- Ошибки и потеря графики ----------
+  // Любая ошибка JS показывается внизу экрана (а не молча ломает игру) и запоминается для отчёта
+  let errShown = 0;
+  function reportError(msg) {
+    msg = String(msg || 'неизвестная ошибка').slice(0, 300);
+    try { localStorage.setItem('craftmine.lastError', new Date().toISOString() + ' ' + VERSION + ': ' + msg); } catch (_) { /* ignore */ }
+    const now = Date.now();
+    if (now - errShown < 4000) return;
+    errShown = now;
+    toast('Ошибка: ' + msg, 6000);
+  }
+  window.addEventListener('error', (e) => reportError(e.message + (e.lineno ? ` (${(e.filename || '').split('/').pop()}:${e.lineno})` : '')));
+  window.addEventListener('unhandledrejection', (e) => reportError(e.reason && (e.reason.message || e.reason)));
+  // Android может отобрать у WebView графический контекст (мало памяти, свернули игру) — сохраняемся и перезапускаемся
+  $('gl').addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    try { savePlayer(); } catch (_) { /* ignore */ }
+    setTimeout(() => location.reload(), 1500);
+  });
+  $('gl').addEventListener('webglcontextrestored', () => location.reload());
 
   const controls = new CM.Controls($('dpad'), $('look-zone'));
 
@@ -555,7 +576,7 @@
     $('set-rd').value = settings.renderDistance;
     $('val-rd').textContent = settings.renderDistance;
     $('set-sens').value = settings.sensitivity;
-    $('val-sens').textContent = settings.sensitivity;
+    document.querySelectorAll('.val-sens').forEach((el) => { el.textContent = settings.sensitivity; });
     $('set-autojump').checked = settings.autoJump;
     $('set-falldmg').checked = settings.fallDamage;
     $('set-coords').checked = settings.showCoords;
@@ -563,6 +584,13 @@
   function openSettings() { syncSettingsUI(); show('screen-settings'); }
   $('set-rd').addEventListener('input', (e) => { settings.renderDistance = +e.target.value; syncSettingsUI(); });
   $('set-sens').addEventListener('input', (e) => { settings.sensitivity = +e.target.value; syncSettingsUI(); });
+  // Кнопки «−» и «+» у чувствительности (в настройках и в меню паузы), сохраняются сразу
+  document.querySelectorAll('[data-sens]').forEach((b) => b.addEventListener('click', (e) => {
+    e.preventDefault();
+    settings.sensitivity = Math.max(10, Math.min(400, settings.sensitivity + +b.dataset.sens));
+    store.set('settings', settings);
+    syncSettingsUI();
+  }));
   $('set-autojump').addEventListener('change', (e) => { settings.autoJump = e.target.checked; });
   $('set-falldmg').addEventListener('change', (e) => { settings.fallDamage = e.target.checked; });
   $('set-coords').addEventListener('change', (e) => { settings.showCoords = e.target.checked; });
@@ -600,6 +628,8 @@
     state = 'paused';
     controls.reset();
     savePlayer();
+    syncSettingsUI();
+    $('toast').classList.add('hidden');
     $('pause-info').innerHTML = `Мир: ${escapeHtml(current.name)}<br>Режим: ${creative ? 'Творческий' : 'Выживание'}<br>Игрок: ${escapeHtml(nick())}`;
     show('screen-pause');
   }
@@ -641,7 +671,15 @@
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); });
   // Вид от первого / третьего лица
-  function toggleView() { if (state === 'game') thirdPerson = !thirdPerson; }
+  // 0 — от первого лица, 1 — сзади, 2 — спереди
+  const VIEW_NAMES = ['Вид от первого лица', 'Вид сзади', 'Вид спереди'];
+  function toggleView() {
+    if (state !== 'game') return;
+    viewMode = (viewMode + 1) % 3;
+    thirdPerson = viewMode > 0;
+    $('btn-view').classList.toggle('on', thirdPerson);
+    toast(VIEW_NAMES[viewMode]);
+  }
   tap('btn-view', toggleView);
   window.addEventListener('keydown', (e) => { if (e.code === 'F5' || e.code === 'KeyV') { e.preventDefault(); toggleView(); } });
 
@@ -673,7 +711,7 @@
     world.importTiles(store.get('tiles.' + rec.id, {}));
     ents = new CM.Entities(world);
     time = typeof rec.time === 'number' ? rec.time : 0.05;
-    thirdPerson = false;
+    thirdPerson = false; viewMode = 0; $('btn-view').classList.remove('on');
     $('sleep').classList.remove('on');
     player = new CM.Player(nick());
     player.onHurt = () => {
@@ -732,7 +770,7 @@
   let breaking = null;      // {x,y,z,progress}
   let swing = 0;            // анимация взмаха рукой, 0..1
   let breakCooldown = 0;
-  let thirdPerson = false;
+  let thirdPerson = false, viewMode = 0;
   let ents = null;
   let time = 0.05;          // время суток 0..1: 0 — рассвет, 0.25 — полдень, 0.5 — закат, 0.75 — полночь
   let sleepT = 0;
@@ -758,14 +796,19 @@
     if (!thirdPerson) return c;
     const cp = Math.cos(c.pitch);
     const d = [-Math.sin(c.yaw) * cp, Math.sin(c.pitch), -Math.cos(c.yaw) * cp];
+    const sgn = viewMode === 2 ? 1 : -1; // спереди камера стоит перед лицом и смотрит на игрока
     let dist = 4;
     for (let k = 0.3; k <= 4; k += 0.2) {
-      if (world.getBoxes(Math.floor(c.x - d[0] * k), Math.floor(c.y - d[1] * k), Math.floor(c.z - d[2] * k))) { dist = Math.max(0.3, k - 0.3); break; }
+      if (world.getBoxes(Math.floor(c.x + sgn * d[0] * k), Math.floor(c.y + sgn * d[1] * k), Math.floor(c.z + sgn * d[2] * k))) { dist = Math.max(0.3, k - 0.3); break; }
     }
-    return { x: c.x - d[0] * dist, y: c.y - d[1] * dist, z: c.z - d[2] * dist, yaw: c.yaw, pitch: c.pitch, dist };
+    const pos = { x: c.x + sgn * d[0] * dist, y: c.y + sgn * d[1] * dist, z: c.z + sgn * d[2] * dist };
+    if (viewMode === 2) return Object.assign(pos, { yaw: c.yaw + Math.PI, pitch: -c.pitch, front: c });
+    return Object.assign(pos, { yaw: c.yaw, pitch: c.pitch, dist });
   }
 
   function castRay(cam, sx, sy) {
+    // вид спереди зеркальный: целимся глазами игрока, отражая точку касания по горизонтали
+    if (cam.front) { cam = cam.front; sx = window.innerWidth - sx; }
     const o = [cam.x, cam.y, cam.z], d = renderer.screenRay(cam, sx, sy), reach = REACH + (cam.dist || 0);
     return { o, d, reach, hit: world.raycast(o, d, reach) };
   }
@@ -933,6 +976,9 @@
 
   function frame(now) {
     requestAnimationFrame(frame);
+    try { step(now); } catch (e) { reportError((e && e.message) + (e && e.stack ? ' @ ' + String(e.stack).split('\n')[1] : '')); }
+  }
+  function step(now) {
     let dt = (now - last) / 1000;
     last = now;
     if (dt > 0.1) dt = 0.1;
@@ -1035,7 +1081,7 @@
       const slot = inv.slots[selected], held = slot ? slot.id : 0;
       const hand = { swing, bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs), bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs), light: player.headInWater ? 0.7 : 1 };
       if (!held) hand.arm = true;
-      else if (Items.isBlock(held)) { const sh = Items.itemShape(held); hand.boxes = sh.boxes; hand.tex = sh.tex; }
+      else if (Items.isBlock(held)) hand.shape = Items.itemShape(held);
       else hand.sprite = Items.sprite(held);
       extras.hand = hand;
     }
@@ -1050,8 +1096,7 @@
     if (state === 'inventory') { closeInventory(); return true; }
     if (state === 'paused') {
       if (visible('screen-textures')) { show('screen-settings'); return true; }
-      if (visible('screen-textures')) { show('screen-settings'); return true; }
-    if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
+      if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
       resume(); return true;
     }
     if (state === 'dead' || state === 'loading' || state === 'sleep') return true;

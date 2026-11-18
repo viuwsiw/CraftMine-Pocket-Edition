@@ -80,12 +80,15 @@
   });
   paint('bed_top_foot', () => vary([176, 40, 40], 0.06));
   const bedSide = (col) => (x, y) => {
+    if (y < 7) return [0, 0, 0, 0];
     if (y >= 12) return (x <= 2 || x >= 13) ? vary([120, 86, 48], 0.06) : [0, 0, 0, 0];
     if (y >= 10) return vary([140, 100, 56], 0.06);
     return vary(col, 0.05);
   };
   paint('bed_side_head', bedSide([230, 230, 232]));
   paint('bed_side_foot', bedSide([160, 34, 34]));
+  paint('bed_end_head', bedSide([230, 230, 232]));
+  paint('bed_end_foot', bedSide([160, 34, 34]));
 
   // ---------- Солнце и луна ----------
   paint('sun', (x, y) => {

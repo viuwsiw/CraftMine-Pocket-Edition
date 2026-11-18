@@ -522,3 +522,12 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 .tex-btn.up { background: var(--green-face); box-shadow: inset 2px 2px 0 var(--green-hi), inset -2px -2px 0 var(--green-lo); }
 .tex-btn:disabled { opacity: 0.35; }
 #screen-textures { justify-content: flex-start; }
+
+/* ---- Чувствительность: ползунок с кнопками ---- */
+.stepper { display: flex; align-items: center; gap: 10px; }
+.stepper input[type=range] { flex: 1; }
+.btn.sbtn { min-width: 0; width: clamp(38px, 8vmin, 52px); padding: 6px 0; font-size: clamp(14px, 3vmin, 20px); flex: none; }
+.pause-sens { font-size: clamp(8px, 1.8vmin, 12px); color: var(--text-dim); margin: 6px 0 10px; }
+.pause-sens b { min-width: 4.5em; text-align: center; color: #fff; }
+.pause-sens b::after { content: '%'; }
+#btn-view.on { background: rgba(70,120,50,0.7); }

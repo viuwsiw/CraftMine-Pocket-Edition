@@ -18,7 +18,7 @@
     <div class="logo-wrap">
       <h1 class="logo">CraftMine</h1>
       <div class="subtitle">Pocket Edition</div>
-      <div class="version-top">v0.0.3 alpha</div>
+      <div class="version-top">v0.1.0 alpha build 1</div>
     </div>
     <div class="tiles">
       <button class="tile locked" id="btn-multi"><span class="tile-label">Мультиплеер</span><img class="tile-icon" id="icon-multi" alt=""><span class="tile-badge">скоро</span></button>
@@ -85,10 +85,14 @@
         <span>Дальность прорисовки: <b id="val-rd"></b> чанк.</span>
         <input id="set-rd" type="range" min="2" max="8" step="1">
       </label>
-      <label class="field">
-        <span>Чувствительность: <b id="val-sens"></b>%</span>
-        <input id="set-sens" type="range" min="30" max="250" step="10">
-      </label>
+      <div class="field">
+        <span>Чувствительность камеры: <b class="val-sens"></b>%</span>
+        <div class="stepper">
+          <button class="btn sbtn" data-sens="-10">−</button>
+          <input id="set-sens" type="range" min="10" max="400" step="5">
+          <button class="btn sbtn" data-sens="10">+</button>
+        </div>
+      </div>
       <label class="check"><input id="set-autojump" type="checkbox"> Автопрыжок</label>
       <label class="check"><input id="set-falldmg" type="checkbox"> Урон от падения</label>
       <label class="check"><input id="set-coords" type="checkbox"> Показывать координаты и FPS</label>
@@ -149,6 +153,12 @@
   <section id="screen-pause" class="screen dim-bg hidden">
     <div class="panel-title">Игра на паузе</div>
     <div class="pause-info" id="pause-info"></div>
+    <div class="stepper pause-sens">
+      <span>Чувствительность</span>
+      <button class="btn sbtn" data-sens="-10">−</button>
+      <b class="val-sens"></b>
+      <button class="btn sbtn" data-sens="10">+</button>
+    </div>
     <div class="menu-buttons">
       <button class="btn big" id="btn-resume">Продолжить</button>
       <button class="btn" id="btn-pause-settings">Настройки</button>
