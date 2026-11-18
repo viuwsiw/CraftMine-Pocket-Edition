@@ -362,8 +362,10 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 }
 
 /* ---- Полёт: кнопка спуска на крестовине ---- */
-.dp.fly { visibility: hidden; }
-#dpad.flying .dp.fly { visibility: visible; }
+.dp.fly .ic-down { display: none; }
+#dpad.flying .dp.fly .ic-down { display: block; }
+#dpad.flying .dp.fly .ic-sneak { display: none; }
+#dpad.sneaking:not(.flying) .dp.fly { background: rgba(120, 200, 120, 0.45); }
 #dpad.flying .dp.jump span { border-radius: 0; width: 0; height: 0; background: none; border: 0;
   border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 12px solid rgba(70,70,70,0.6); }
 

@@ -467,7 +467,7 @@ void main() {
 
       const CS = CM.CS;
       const far = (R + 1) * CS * 1.2;
-      const proj = perspective(70 * Math.PI / 180, this.canvas.width / this.canvas.height, 0.05, far);
+      const proj = perspective((this.fov || 70) * Math.PI / 180, this.canvas.width / this.canvas.height, 0.05, far);
       const cp = Math.cos(cam.pitch);
       const dir = [-Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp];
       const view = lookDir([cam.x, cam.y, cam.z], dir);
@@ -551,7 +551,7 @@ void main() {
       const r = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
       const u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]];
       const w = window.innerWidth, h = window.innerHeight;
-      const t = Math.tan(35 * Math.PI / 180);
+      const t = Math.tan((this.fov || 70) / 2 * Math.PI / 180);
       const nx = (sx / w * 2 - 1) * t * (w / h), ny = (1 - sy / h * 2) * t;
       const d = [f[0] + r[0] * nx + u[0] * ny, f[1] + r[1] * nx + u[1] * ny, f[2] + r[2] * nx + u[2] * ny];
       const l = Math.hypot(d[0], d[1], d[2]);

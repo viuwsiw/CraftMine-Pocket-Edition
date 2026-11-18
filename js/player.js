@@ -105,6 +105,8 @@
       this.foodTimer = 0;
       this.inLava = false;
       this.onLadder = false;
+      this.sprinting = false;  // бег (двойной тап вперёд)
+      this.sneaking = false;   // присед
     }
 
     get eye() { return [this.pos[0], this.pos[1] + EYE, this.pos[2]]; }
@@ -171,7 +173,12 @@
       const len = Math.hypot(f, s);
       if (len > 1) { f /= len; s /= len; }
       const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
-      const speed = this.flying ? FLY : WALK * (this.inLava ? 0.35 : this.inWater ? 0.55 : 1);
+      // Бег и присед
+      this.sneaking = !!input.sneak;
+      if (this.sprinting && (f <= 0.1 || (this.sneaking && !this.flying) || (this.noSprint && !this.flying))) this.sprinting = false;
+      let speed = this.flying ? FLY * (this.sprinting ? 2 : 1) : WALK * (this.inLava ? 0.35 : this.inWater ? 0.55 : 1);
+      if (!this.flying && this.sprinting) speed *= 1.3;
+      if (!this.flying && this.sneaking && !this.inWater) speed *= 0.3;
       const tx = (-sy * f + cy * s) * speed;
       const tz = (-cy * f - sy * s) * speed;
       const accel = this.flying ? 10 : (this.onGround || this.inWater ? 18 : 5);
@@ -216,7 +223,12 @@
         }
         const sx = p[0], sz = p[2];
         const cx = this.moveAxis(world, 0, v[0] * sdt);
+        // присед на земле: не шагаем с края (как в Minecraft)
+        const edge = this.sneaking && !this.flying && (this.onGround || wasGround) && !this.inWater;
+        if (edge && p[0] !== sx && this.boxFree(world, p[0], p[1] - 0.6, p[2])) { p[0] = sx; v[0] = 0; }
+        const sz0 = p[2];
         const cz = this.moveAxis(world, 2, v[2] * sdt);
+        if (edge && p[2] !== sz0 && this.boxFree(world, p[0], p[1] - 0.6, p[2])) { p[2] = sz0; v[2] = 0; }
         if ((cx || cz) && (this.onGround || wasGround) && !this.flying) {
           // Подъём на невысокую ступеньку (ступеньки, люки) без прыжка
           const ax = p[0], ay = p[1], az = p[2];
@@ -264,7 +276,8 @@
       }
       // Покачивание камеры при ходьбе
       const hs = Math.hypot(v[0], v[2]);
-      if (!this.flying) this.exhaustion += hs * dt * (this.inWater ? 0.05 : 0.03); // ходьба и плавание утомляют
+      if (!this.flying) this.exhaustion += hs * dt * (this.inWater ? 0.05 : this.sprinting ? 0.1 : 0.03); // ходьба, бег и плавание утомляют
+      if (hitH && this.sprinting && !this.flying) this.sprinting = false; // упёрся в стену — бег прекращается
       this.updateHunger(dt);
       this.walk = (this.walk || 0) + dt * Math.min(hs, 6) * 2.2; // фаза шага для модели (и в полёте, и в воде)
       if (this.onGround && hs > 0.5) this.bob += dt * hs * 2.2;
@@ -298,7 +311,8 @@
     camera() {
       const e = this.eye;
       const bobY = Math.abs(Math.sin(this.bob)) * 0.06;
-      return { x: e[0], y: e[1] + bobY, z: e[2], yaw: this.yaw, pitch: this.pitch };
+      this.eyeDrop = (this.eyeDrop || 0) + (((this.sneaking && !this.flying) ? 0.3 : 0) - (this.eyeDrop || 0)) * 0.25; // присед — глаза ниже
+      return { x: e[0], y: e[1] + bobY - this.eyeDrop, z: e[2], yaw: this.yaw, pitch: this.pitch };
     }
   }
 

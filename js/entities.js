@@ -91,10 +91,10 @@
     player: { scale: 1.8 / 32, parts: [
       { c: [-2, 6, 0], s: [4, 12, 4], t: all(T.pl_leg), pivot: [-2, 12, 0], swing: 1 },
       { c: [2, 6, 0], s: [4, 12, 4], t: all(T.pl_leg), pivot: [2, 12, 0], swing: -1 },
-      { c: [0, 18, 0], s: [8, 12, 4], t: all(T.pl_body) },
-      { c: [-6, 18, 0], s: [4, 12, 4], t: [T.pl_arm, T.pl_arm, T.pl_body, T.skin, T.pl_arm, T.pl_arm], pivot: [-6, 22, 0], swing: -1, arm: 'L' },
-      { c: [6, 18, 0], s: [4, 12, 4], t: [T.pl_arm, T.pl_arm, T.pl_body, T.skin, T.pl_arm, T.pl_arm], pivot: [6, 22, 0], swing: 1, arm: 'R' },
-      { c: [0, 28, 0], s: [8, 8, 8], t: [T.pl_head_side, T.pl_head_side, T.pl_head_top, T.skin, T.pl_head_back, T.pl_face], pivot: [0, 24, 0], head: true },
+      { c: [0, 18, 0], s: [8, 12, 4], t: all(T.pl_body), upper: true },
+      { c: [-6, 18, 0], s: [4, 12, 4], t: [T.pl_arm, T.pl_arm, T.pl_body, T.skin, T.pl_arm, T.pl_arm], pivot: [-6, 22, 0], swing: -1, arm: 'L', upper: true },
+      { c: [6, 18, 0], s: [4, 12, 4], t: [T.pl_arm, T.pl_arm, T.pl_body, T.skin, T.pl_arm, T.pl_arm], pivot: [6, 22, 0], swing: 1, arm: 'R', upper: true },
+      { c: [0, 28, 0], s: [8, 8, 8], t: [T.pl_head_side, T.pl_head_side, T.pl_head_top, T.skin, T.pl_head_back, T.pl_face], pivot: [0, 24, 0], head: true, upper: true },
     ] },
   };
 
@@ -121,6 +121,12 @@
           const ry = qy - pv[1], rz = qz - pv[2];
           qy = pv[1] + ry * ca - rz * sa;
           qz = pv[2] + ry * sa + rz * ca;
+        }
+        // присед: верх тела наклоняется вперёд вокруг пояса, ноги чуть назад, вся модель ниже
+        if (anim.sneak) {
+          if (p.upper) { const ry = qy - 12, rz = qz; qy = 12 + ry * 0.955 + rz * 0.296; qz = ry * -0.296 + rz * 0.955; }
+          else qz += 1.5;
+          qy -= 2;
         }
         qx *= sc; qy *= sc; qz *= sc;
         return [x + qx * cy + qz * sy, y + qy, z - qx * sy + qz * cy];
@@ -501,7 +507,7 @@
       }
       // Другие игроки в сетевой игре
       for (const r of this.remote || []) {
-        buildModel(normal, 'player', r.pos[0], r.pos[1], r.pos[2], r.yaw, { swing: Math.sin(r.walk || 0) * 0.7 * Math.min(1, r.speed || 0), headPitch: r.pitch }, 1);
+        buildModel(normal, 'player', r.pos[0], r.pos[1], r.pos[2], r.yaw, { swing: Math.sin(r.walk || 0) * 0.7 * Math.min(1, r.speed || 0), headPitch: r.pitch, sneak: r.sneak }, 1);
       }
       for (const it of this.items) {
         const a = it.spin + it.age * 1.8, ca = Math.cos(a), sa = Math.sin(a);

@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 5';
+  const VERSION = '0.1.0 alpha build 6';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -1355,7 +1355,7 @@
       net.tPos += dt;
       if (net.tPos > 0.1 && net.peers.size) {
         net.tPos = 0;
-        netSend({ t: 'pos', id: net.id, p: player.pos.map((v) => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3) });
+        netSend({ t: 'pos', id: net.id, p: player.pos.map((v) => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), s: player.sneaking ? 1 : 0 });
       }
       if (net.host) { net.tTime += dt; if (net.tTime > 5) { net.tTime = 0; netSend({ t: 'time', v: time }); } }
     }
@@ -1382,8 +1382,8 @@
         updatePauseNet();
       } else if (m.t === 'pos') {
         const r = net.peers.get(from);
-        if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; }
-        NET.sendExcept(from, JSON.stringify({ t: 'pos', id: from, p: m.p, yaw: m.yaw, pitch: m.pitch }));
+        if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; }
+        NET.sendExcept(from, JSON.stringify({ t: 'pos', id: from, p: m.p, yaw: m.yaw, pitch: m.pitch, s: m.s }));
       } else if (m.t === 'set') {
         if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true);
         NET.sendExcept(from, JSON.stringify({ t: 'set', x: m.x, y: m.y, z: m.z, b: m.b }));
@@ -1400,7 +1400,7 @@
       toast(`Ты в мире игрока ${cleanNick(m.host)}`, 3000);
     } else if (m.t === 'pos') {
       const r = net.peers.get(m.id);
-      if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; }
+      if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; }
     } else if (m.t === 'set') { if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true); }
     else if (m.t === 'join') { addPeer(m.id, m.name); toast(`${cleanNick(m.name)} присоединился к игре`); }
     else if (m.t === 'leave') removePeer(m.id);
@@ -1411,7 +1411,7 @@
   function updateLabels(cam) {
     $('labels').style.display = state === 'game' ? '' : 'none';
     if (!net.peers.size) return;
-    const w = window.innerWidth, h = window.innerHeight, t = Math.tan(35 * Math.PI / 180);
+    const w = window.innerWidth, h = window.innerHeight, t = Math.tan((renderer.fov || 70) / 2 * Math.PI / 180);
     const cp = Math.cos(cam.pitch);
     const f = [-Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), -Math.cos(cam.yaw) * cp];
     const r = [Math.cos(cam.yaw), 0, -Math.sin(cam.yaw)];
@@ -1484,6 +1484,9 @@
       if (world.isLoadedAt(player.pos[0], player.pos[2])) {
         const hpBefore = player.health;
         const bob0 = player.bob, wet0 = player.inWater;
+        controls.flying = player.flying;
+        player.noSprint = !creative && player.food <= 6; // голодный не бегает
+        if (controls.consumeSprint()) player.sprinting = true;
         player.update(dt, controls.state(), world, { autoJump: settings.autoJump });
         // шаги: звук на каждом шаге по материалу под ногами; всплеск при входе в воду
         if (player.onGround && Math.floor(player.bob / Math.PI) !== Math.floor(bob0 / Math.PI)) {
@@ -1537,6 +1540,9 @@
     }
 
     world.update(player.pos[0], player.pos[2], R, 2, 2);
+    // бег — поле зрения чуть шире
+    const fovT = player.sprinting ? (player.flying ? 84 : 80) : 70;
+    renderer.fov = (renderer.fov || 70) + (fovT - (renderer.fov || 70)) * Math.min(1, dt * 8);
     const cam = viewCam();
     updateLabels(cam);
     Snd.setListener(player.pos[0], player.pos[1] + 1.6, player.pos[2], player.yaw);
@@ -1552,7 +1558,7 @@
     if (thirdPerson) {
       const sw = Math.sin(player.walk) * 0.9 * Math.min(1, hs / 2); // ноги и руки двигаются и в полёте
       CM.Models.build(m.normal, 'player', player.pos[0], player.pos[1], player.pos[2], player.yaw,
-        { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0 }, 1);
+        { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0, sneak: player.sneaking }, 1);
     } else {
       const slot = inv.slots[selected], held = slot ? slot.id : 0;
       const hand = { swing, bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs), bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs), light: player.headInWater ? 0.7 : 1 };

@@ -26,10 +26,25 @@
       if (now - (this.lastJump || 0) < 320) { this.doubleJump = true; this.lastJump = 0; } else this.lastJump = now;
     }
 
+    _forwardPressed() {
+      const now = performance.now();
+      if (now - (this.lastFwd || 0) < 320) { this.sprintReq = true; this.lastFwd = 0; } else this.lastFwd = now;
+    }
+    consumeSprint() { const s = this.sprintReq; this.sprintReq = false; return !!s; }
+
     consumeDoubleJump() { const d = this.doubleJump; this.doubleJump = false; return !!d; }
 
     _refreshDpad() {
       const active = new Set(this.dpadPointers.values());
+      // двойной тап «вперёд» — бег
+      const fwd = active.has('up') || active.has('ul') || active.has('ur');
+      if (fwd && !this.fwdWasActive) this._forwardPressed();
+      this.fwdWasActive = fwd;
+      // кнопка справа внизу: на земле включает/выключает присед, в полёте — держать, чтобы опускаться
+      const sn = active.has('fdown');
+      if (sn && !this.sneakWasActive && !this.flying) this.sneakToggle = !this.sneakToggle;
+      this.sneakWasActive = sn;
+      this.dpad.classList.toggle('sneaking', !!this.sneakToggle);
       if (active.has('jump') && !this.jumpWasActive) this._jumpPressed();
       this.jumpWasActive = active.has('jump');
       this.dpad.querySelectorAll('[data-dir]').forEach((b) => b.classList.toggle('active', active.has(b.dataset.dir)));
@@ -123,6 +138,8 @@
         if (e.target && (e.target.tagName === 'INPUT')) return;
         this.keys.add(e.code);
         if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) this._jumpPressed(); }
+        if ((e.code === 'KeyW' || e.code === 'ArrowUp') && !e.repeat) this._forwardPressed();
+        if (e.code === 'ControlLeft' && !e.repeat) this.sprintReq = true;
         if (e.code === 'KeyE' && !e.repeat && this.onInventoryKey) this.onInventoryKey();
         if (/^Digit[1-9]$/.test(e.code) && this.onDigit) this.onDigit(+e.code.slice(5) - 1);
       });
@@ -149,8 +166,11 @@
       if (dirs.has('left') || dirs.has('ul') || k.has('KeyA') || k.has('ArrowLeft')) strafe -= 1;
       if (dirs.has('right') || dirs.has('ur') || k.has('KeyD') || k.has('ArrowRight')) strafe += 1;
       const jump = dirs.has('jump') || k.has('Space');
-      const down = dirs.has('fdown') || k.has('ShiftLeft') || k.has('ShiftRight');
-      return { forward: Math.max(-1, Math.min(1, forward)), strafe: Math.max(-1, Math.min(1, strafe)), jump, down };
+      const shift = k.has('ShiftLeft') || k.has('ShiftRight');
+      const down = dirs.has('fdown') || shift;
+      // присед: включённая кнопка (на земле) или Shift
+      const sneak = (!!this.sneakToggle && !this.flying) || shift || (this.flying && dirs.has('fdown'));
+      return { forward: Math.max(-1, Math.min(1, forward)), strafe: Math.max(-1, Math.min(1, strafe)), jump, down, sneak };
     }
 
     consumeLook() {
