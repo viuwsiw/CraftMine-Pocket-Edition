@@ -1,6 +1,8 @@
 package com.craftmine.pe;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -15,6 +17,8 @@ import android.webkit.WebViewClient;
 /** CraftMine: Pocket Edition — игра работает внутри полноэкранного WebView из assets. */
 public class MainActivity extends Activity {
     private WebView web;
+    private ValueCallback<Uri[]> fileCallback;
+    private static final int PICK_IMAGE = 1001;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -37,7 +41,24 @@ public class MainActivity extends Activity {
         s.setAllowFileAccess(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         s.setUserAgentString(s.getUserAgentString() + " CraftMinePE/0.0.2");
-        web.setWebChromeClient(new WebChromeClient());
+        // Выбор PNG-файла для своих текстур
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (fileCallback != null) fileCallback.onReceiveValue(null);
+                fileCallback = callback;
+                Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("image/*");
+                try {
+                    startActivityForResult(Intent.createChooser(intent, "Выбери картинку"), PICK_IMAGE);
+                } catch (Exception e) {
+                    fileCallback = null;
+                    return false;
+                }
+                return true;
+            }
+        });
         web.setWebViewClient(new WebViewClient());
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setVerticalScrollBarEnabled(false);
@@ -61,6 +82,18 @@ public class MainActivity extends Activity {
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) hideSystemUi();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == PICK_IMAGE && fileCallback != null) {
+            Uri[] result = null;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) result = new Uri[] { data.getData() };
+            fileCallback.onReceiveValue(result);
+            fileCallback = null;
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override

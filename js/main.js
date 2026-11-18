@@ -40,6 +40,22 @@
   }
 
   const controls = new CM.Controls($('dpad'), $('look-zone'));
+
+  // ---------- Свои текстуры ----------
+  function refreshTextures() {
+    renderer.updateAtlas();
+    CM.Geo.clearSpriteCache();
+    if (typeof Items !== 'undefined' && Items) {
+      Items.buildIcons();
+      for (const el of document.querySelectorAll('#hotbar img')) el.dataset.id = '';
+      if (inv) renderHotbar();
+    }
+    document.documentElement.style.setProperty('--stone-tex', `url(${CM.Textures.tileURL('stone', 4)})`);
+    document.documentElement.style.setProperty('--dirt-tex', `url(${CM.Textures.tileURL('dirt', 4)})`);
+    $('icon-play').src = CM.Textures.blockIcon(CM.BLOCKS[CM.B.GRASS].tex, 96);
+  }
+  CM.TexPack.loadSaved().then((n) => { if (n) refreshTextures(); });
+  let texUI = null;
   const Bk = CM.B;
 
   // ---------- Иконки меню ----------
@@ -419,7 +435,7 @@
   }
 
   // ---------- Экраны ----------
-  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead', 'screen-inv'];
+  const screens = ['screen-menu', 'screen-worlds', 'screen-create', 'screen-settings', 'screen-loading', 'screen-pause', 'screen-dead', 'screen-inv', 'screen-textures'];
   function show(id) {
     for (const s of screens) $(s).classList.toggle('hidden', s !== id);
     $('hud').classList.toggle('hidden', !(state === 'game' || state === 'paused' || state === 'dead' || state === 'inventory' || state === 'sleep'));
@@ -537,6 +553,18 @@
   $('set-autojump').addEventListener('change', (e) => { settings.autoJump = e.target.checked; });
   $('set-falldmg').addEventListener('change', (e) => { settings.fallDamage = e.target.checked; });
   $('set-coords').addEventListener('change', (e) => { settings.showCoords = e.target.checked; });
+  tap('btn-textures', () => {
+    if (!texUI) texUI = CM.TexPack.buildUI($('tex-root'), refreshTextures, toast);
+    else texUI.refreshAll();
+    show('screen-textures');
+  });
+  tap('btn-tex-done', () => show('screen-settings'));
+  tap('btn-tex-reset', () => {
+    if (!confirm('Вернуть все стандартные текстуры?')) return;
+    CM.TexPack.resetAll();
+    refreshTextures();
+    if (texUI) texUI.refreshAll();
+  });
   tap('btn-settings-done', () => {
     store.set('settings', settings);
     $('debug').classList.toggle('hidden', !settings.showCoords);
@@ -998,7 +1026,9 @@
     if (state === 'game') { pause(); return true; }
     if (state === 'inventory') { closeInventory(); return true; }
     if (state === 'paused') {
-      if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
+      if (visible('screen-textures')) { show('screen-settings'); return true; }
+      if (visible('screen-textures')) { show('screen-settings'); return true; }
+    if (visible('screen-settings')) { $('btn-settings-done').click(); return true; }
       resume(); return true;
     }
     if (state === 'dead' || state === 'loading' || state === 'sleep') return true;

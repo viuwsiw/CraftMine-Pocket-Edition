@@ -90,7 +90,19 @@
       <label class="check"><input id="set-coords" type="checkbox"> Показывать координаты и FPS</label>
     </div>
     <div class="row-buttons">
+      <button class="btn" id="btn-textures">Текстуры</button>
       <button class="btn green" id="btn-settings-done">Готово</button>
+    </div>
+  </section>
+
+  <!-- Свои текстуры -->
+  <section id="screen-textures" class="screen dirt-bg hidden">
+    <div class="panel-title">Текстуры</div>
+    <div class="tex-help">Загрузи свою PNG-картинку для любой стороны блока или предмета. Подойдёт любой размер с нужными пропорциями: 16×16, 32×32, 64×64… Для двери — одна картинка 1:2 (верх и низ). Текстуры сохраняются в игре и остаются после обновлений.</div>
+    <div class="tex-wrap" id="tex-root"></div>
+    <div class="row-buttons">
+      <button class="btn" id="btn-tex-reset">Сбросить все</button>
+      <button class="btn green" id="btn-tex-done">Готово</button>
     </div>
   </section>
 
@@ -180,6 +192,7 @@
   <script src="js/player.js"></script>
   <script src="js/items.js"></script>
   <script src="js/entities.js"></script>
+  <script src="js/texpacks.js"></script>
   <script src="js/controls.js"></script>
   <script src="js/main.js"></script>
 </body>

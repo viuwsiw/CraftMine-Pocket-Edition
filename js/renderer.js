@@ -183,7 +183,7 @@ void main() {
     return [x, y, z];
   }
 
-  CM.Geo = { shapeVerts, partVerts, tileUV, spriteVerts, rotate };
+  CM.Geo = { shapeVerts, partVerts, tileUV, spriteVerts, rotate, clearSpriteCache: () => spriteCache.clear() };
 
   class Renderer {
     constructor(canvas, iconMode) {
@@ -222,6 +222,7 @@ void main() {
       gl.enableVertexAttribArray(this.a.light);
 
       const tex = gl.createTexture();
+      this.atlasTex = tex;
       gl.bindTexture(gl.TEXTURE_2D, tex);
       gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
@@ -386,6 +387,13 @@ void main() {
       gl.uniform1f(this.u.uAlphaTest, 0.5);
       this._drawDynamic(shapeVerts(boxes, tex, xf, 1), gl.TRIANGLES);
       return this.canvas.toDataURL();
+    }
+
+    // Атлас изменился (свои текстуры) — загрузить заново
+    updateAtlas() {
+      const gl = this.gl;
+      gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, CM.Textures.atlas);
     }
 
     resize() {
