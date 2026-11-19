@@ -184,12 +184,17 @@
     if (tile !== null && tile !== undefined) {
       const isBow = id === I.BOW;
       const t = isBow && anim.aim > 0.05 ? T['bow_pulling_' + Math.min(2, Math.floor(anim.aim * 2.99))] : tile;
-      const size = 13;
-      // плоскость предмета повёрнута на ~40° от направления взгляда — видно и спереди, и сбоку
-      v = Geo.spriteVerts(t, (p) => toWorld(6.5 + (p[2] - 0.5) * 1.2 + (p[0] - 0.3) * size * 0.62, 10.5 + (p[1] - 0.25) * size, -2.5 - (p[0] - 0.3) * size * 0.78), 1);
+      // Как в Minecraft: объёмная картинка толщиной в 1 пиксель, рукоять (нижний левый угол картинки) в кулаке,
+      // плоскость предмета — вдоль руки (вперёд и вверх), остриё смотрит вперёд-вверх
+      const size = 12, grip = [0.22, 0.22];
+      v = Geo.spriteVerts(t, (p) => toWorld(6 + (p[2] - 0.5) * size, 10 + (p[1] - grip[1]) * size, -1.5 - (p[0] - grip[0]) * size), 1);
     } else {
-      const s = 6;
-      v = Geo.itemVerts(CM.Items.itemShape(id), (p) => toWorld(6 + (p[0] - 0.5) * s, 10 + (p[1] - 0.5) * s, -3 + (p[2] - 0.5) * s), 1);
+      // блок — кубик 6×6×6 пикселей в кулаке, повёрнут на 45° как в Minecraft
+      const s = 6, c45 = Math.SQRT1_2;
+      v = Geo.itemVerts(CM.Items.itemShape(id), (p) => {
+        const x = (p[0] - 0.5) * s, z = (p[2] - 0.5) * s;
+        return toWorld(6 + x * c45 - z * c45, 9.5 + (p[1] - 0.5) * s, -3.5 + x * c45 + z * c45);
+      }, 1);
     }
     for (let k = 0; k < v.length; k++) out.push(v[k]);
   }
