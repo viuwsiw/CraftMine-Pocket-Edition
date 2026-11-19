@@ -184,11 +184,11 @@
     if (tile !== null && tile !== undefined) {
       const isBow = id === I.BOW;
       const t = isBow && anim.aim > 0.05 ? T['bow_pulling_' + Math.min(2, Math.floor(anim.aim * 2.99))] : tile;
-      const size = 14;
-      // плоскость предмета вдоль руки: ширина картинки — вперёд, высота — вверх
-      v = Geo.spriteVerts(t, (p) => toWorld(6 + (p[2] - 0.5) * 1.2, 11 + (p[1] - 0.25) * size, -2 - (p[0] - 0.25) * size), 1);
+      const size = 13;
+      // плоскость предмета повёрнута на ~40° от направления взгляда — видно и спереди, и сбоку
+      v = Geo.spriteVerts(t, (p) => toWorld(6.5 + (p[2] - 0.5) * 1.2 + (p[0] - 0.3) * size * 0.62, 10.5 + (p[1] - 0.25) * size, -2.5 - (p[0] - 0.3) * size * 0.78), 1);
     } else {
-      const s = 5;
+      const s = 6;
       v = Geo.itemVerts(CM.Items.itemShape(id), (p) => toWorld(6 + (p[0] - 0.5) * s, 10 + (p[1] - 0.5) * s, -3 + (p[2] - 0.5) * s), 1);
     }
     for (let k = 0; k < v.length; k++) out.push(v[k]);

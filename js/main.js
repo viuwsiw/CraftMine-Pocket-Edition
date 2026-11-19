@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 9';
+  const VERSION = '0.1.0 alpha build 10';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -369,6 +369,7 @@
   function craft(r) {
     if (!r || !inv.canCraft(r)) return;
     for (const [id, n] of r.in) inv.remove(id, n);
+    Snd.play('craft');
     const t = Items.tool(r.out[0]);
     const left = inv.add(r.out[0], r.out[1], t ? t.dur : undefined);
     if (left > 0) throwItem(r.out[0], left, t ? t.dur : undefined);
@@ -467,9 +468,11 @@
     renderInv();
     show('screen-inv');
     $('hud').classList.add('inv-open');
+    Snd.play(invMode === 'chest' ? 'chest_open' : 'inv_open');
   }
   function closeInventory() {
     if (state !== 'inventory') return;
+    Snd.play('inv_close');
     state = 'game';
     picked = null; invTile = null; furnaceEls = null; selRecipe = null;
     controls.reset();
@@ -756,6 +759,7 @@
   tap('btn-quit', () => {
     savePlayer();
     netShutdown();
+    muteAmbient();
     if (world) world.dispose();
     world = null; player = null; current = null;
     state = 'menu';
@@ -779,6 +783,7 @@
     viewMode = (viewMode + 1) % 3;
     thirdPerson = viewMode > 0;
     $('btn-view').classList.toggle('on', thirdPerson);
+    $('hud').classList.toggle('third', thirdPerson);
     toast(VIEW_NAMES[viewMode]);
   }
   tap('btn-view', toggleView);
@@ -819,7 +824,7 @@
     }
     ents = new CM.Entities(world);
     time = typeof rec.time === 'number' ? rec.time : 0.05;
-    thirdPerson = false; viewMode = 0; $('btn-view').classList.remove('on');
+    thirdPerson = false; viewMode = 0; $('btn-view').classList.remove('on'); $('hud').classList.remove('third');
     $('sleep').classList.remove('on');
     player = new CM.Player(nick());
     player.onHurt = () => {
@@ -958,7 +963,7 @@
     const mh = ents.rayMob(o, d, reach);
     const slot = inv.slots[selected], held = slot ? slot.id : 0;
     // Лук: короткий тап — слабый выстрел; удержание — натянуть тетиву (см. interact)
-    if (held === CM.I.BOW) { fireBow(o, d, 0.35); return; }
+    if (held === CM.I.BOW) { const c = castRay(cam, window.innerWidth / 2, window.innerHeight / 2); fireBow(c.o, c.d, 0.35); return; } // лук стреляет в прицел
     if (mh && (!hit || mh.t < hit.t)) {
       const t = Items.tool(held);
       // огниво: поджечь крипера — взорвётся через полторы секунды
@@ -978,7 +983,7 @@
       }
       ents.hitMob(mh.mob, t ? t.dmg : 1, player.pos);
       Snd.play('hit', mh.mob.pos);
-      Snd.play('mob_' + mh.mob.type, mh.mob.pos);
+      Snd.play(Snd.has('mobhurt_' + mh.mob.type) ? 'mobhurt_' + mh.mob.type : 'mob_' + mh.mob.type, mh.mob.pos);
       player.exhaustion += 0.2;
       swing = 1;
       wearTool();
@@ -1142,6 +1147,29 @@
     });
   }
 
+  // Фон: птицы днём и сверчки ночью под открытым небом, треск рядом с огнём и лавой
+  let ambT = 0;
+  function muteAmbient() { for (const n of ['birds', 'crickets', 'fire']) Snd.setAmbient(n, 0); }
+  function updateAmbient(dt) {
+    if (state !== 'game' && state !== 'inventory') { muteAmbient(); return; }
+    ambT -= dt;
+    if (ambT > 0) return;
+    ambT = 0.5;
+    const px = Math.floor(player.pos[0]), py = Math.floor(player.pos[1]), pz = Math.floor(player.pos[2]);
+    let open = true;
+    for (let y = py + 2; y < Math.min(CM.H, py + 24) && open; y++) if (CM.OPAQUE[world.getBlock(px, y, pz)]) open = false;
+    const s = Math.sin(time * Math.PI * 2), day = s > 0.05, night = s < -0.1;
+    const outdoors = open && !player.headInWater;
+    Snd.setAmbient('birds', outdoors && day ? 0.35 : 0);
+    Snd.setAmbient('crickets', outdoors && night ? 0.4 : 0);
+    let near = 99;
+    for (let dy = -3; dy <= 3; dy++) for (let dz = -5; dz <= 5; dz++) for (let dx = -5; dx <= 5; dx++) {
+      const id = world.getBlock(px + dx, py + dy, pz + dz);
+      if (id === Bk.FIRE || CM.FLUID[id] === 2) near = Math.min(near, Math.hypot(dx, dy, dz));
+    }
+    Snd.setAmbient('fire', near < 7 ? 0.7 * (1 - near / 7) : 0);
+  }
+
   // Анимация воды и лавы: текстура медленно «течёт» (сдвиг на пиксель с переливом)
   let liqT = 0, lavaT = 0;
   function animateLiquids(dt) {
@@ -1270,7 +1298,7 @@
     const g = controls.updateGesture(now);
     // Лук: держишь палец — тетива натягивается (до 1 секунды), отпустил — выстрел туда, куда целился
     if (heldItem() === CM.I.BOW) {
-      if (g) { bowPull = Math.min(1, bowPull + dt); bowAim = { x: g.x, y: g.y }; breaking = null; return extras; }
+      if (g) { bowPull = Math.min(1, bowPull + dt); bowAim = { x: window.innerWidth / 2, y: window.innerHeight / 2 }; breaking = null; return extras; }
       if (bowPull > 0.12 && bowAim) { const r = castRay(cam, bowAim.x, bowAim.y); fireBow(r.o, r.d, bowPull); }
       bowPull = 0;
     } else bowPull = 0;
@@ -1609,7 +1637,8 @@
         // шаги: звук на каждом шаге по материалу под ногами; всплеск при входе в воду
         if (player.onGround && Math.floor(player.bob / Math.PI) !== Math.floor(bob0 / Math.PI)) {
           const under = world.getBlock(Math.floor(player.pos[0]), Math.floor(player.pos[1] - 0.2), Math.floor(player.pos[2]));
-          if (under) Snd.play('step', null, Snd.matOf(under));
+          if (player.inWater) Snd.play('step', null, 'water');
+          else if (under) Snd.play('step', null, Snd.matOf(under));
         }
         if (player.inWater && !wet0 && player.vel[1] < -3) Snd.play('splash');
         if (!settings.fallDamage && player.health < hpBefore) player.health = hpBefore;
@@ -1665,6 +1694,7 @@
     const cam = viewCam();
     updateLabels(cam);
     Snd.setListener(player.pos[0], player.pos[1] + 1.6, player.pos[2], player.yaw);
+    updateAmbient(dt);
     const extras = interact(dt, cam, now);
     animateLiquids(dt);
     swing = Math.max(0, swing - dt * 3.5);

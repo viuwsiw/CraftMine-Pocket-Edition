@@ -43,7 +43,7 @@
   const ALIAS = { dig_grass: 'step_grass', dig_sand: 'step_sand', dig_gravel: 'step_gravel', dig_snow: 'step_snow',
     break_grass: 'step_grass', break_sand: 'step_sand', break_gravel: 'step_gravel', break_snow: 'step_snow',
     place_stone: 'step_stone', place_wood: 'step_wood', place_grass: 'step_grass', place_sand: 'step_sand', place_gravel: 'step_gravel', place_snow: 'step_snow', place_glass: 'step_stone' };
-  const VOL = { step: 0.45, dig: 0.6, place: 0.7, break: 0.85, pop: 0.6, hurt: 0.8, mob: 0.7 };
+  const VOL = { step: 0.45, dig: 0.6, place: 0.7, break: 0.85, pop: 0.6, hurt: 0.8, mob: 0.7, click: 0.45, inv_open: 0.5, inv_close: 0.5, craft: 0.6, chest_open: 0.7 };
   function sample(key) {
     let k = key;
     if (!(buffers[k] && buffers[k].length) && ALIAS[k]) k = ALIAS[k];
@@ -121,6 +121,7 @@
     if (id === B.SNOW) return 'snow';
     if (id === B.SAND) return 'sand';
     if (id === B.GRAVEL || id === B.CLAY) return 'gravel';
+    if (CM.FLUID && CM.FLUID[id] === 1) return 'water';
     if (b.leaves || b.plant || id === B.GRASS || id === B.DIRT || id === B.FARMLAND || id === B.TNT) return 'grass';
     if (b.tool === 'axe' || b.burns) return 'wood';
     return 'stone';
@@ -184,8 +185,29 @@
     setTimeout(() => { try { d.disconnect(); } catch (_) { /* ignore */ } }, 3500);
   }
 
+  // Фоновые звуки: петли с плавной громкостью (птицы днём, сверчки ночью, треск огня рядом)
+  const amb = {};
+  function setAmbient(name, target) {
+    if (!ac || ac.state !== 'running') return;
+    let a = amb[name];
+    if (!a) {
+      if (target < 0.01) return;
+      const buf = sample('amb_' + name);
+      if (!buf) return;
+      const src = ac.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      const g = ac.createGain();
+      g.gain.value = 0;
+      src.connect(g); g.connect(master);
+      src.start();
+      a = amb[name] = { src, g };
+    }
+    a.g.gain.setTargetAtTime(enabled ? target : 0, ac.currentTime, 1.2);
+  }
+
   CM.Sound = {
-    play, matOf,
+    play, matOf, setAmbient,
+    has(key) { return !!(buffers[key] && buffers[key].length); },
     loaded() { let n = 0; for (const k in buffers) n += buffers[k].length; return n; },
     setListener(x, y, z, yaw) { listener = [x, y, z, yaw]; },
     setVolume(v) { volume = Math.max(0, Math.min(1, v)); if (master) master.gain.value = volume; },

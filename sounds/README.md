@@ -1,6 +1,6 @@
 # Звуки CraftMine PE
 
-Записанные звуки игры. Все взяты из **свободных наборов с лицензией CC0** (общественное достояние) с OpenGameArt.org
+Записанные звуки игры. Все взяты из **свободных наборов** с OpenGameArt.org: большинство — **CC0** (общественное достояние), некоторые — **CC-BY** (нужно указать автора — указано ниже) и один — **CC-BY-SA** (корова: файлы `mob_cow_*` распространяются под той же лицензией CC-BY-SA 3.0)
 и обработаны (обрезка, моно 22 кГц, выравнивание громкости) скриптом `tools/import-sounds.py`.
 При сборке (`android/build.sh`) папка встраивается в `js/sound_pack.js` скриптом `tools/pack-sounds.py`.
 
@@ -28,3 +28,17 @@
 | зомби | 16 Monster Growls | StarNinjas |
 | скелет | Bones Rattle | congusbongus |
 | паук | Insect or alien scream (short); 80 CC0 creature SFX | qubodup; rubberduck |
+| шаги по траве, гравию, дереву, в воде | Footsteps on different surfaces — **CC-BY 3.0** | congusbongus |
+| шаги по дереву, камню, гравию, земле | Different steps on wood, stone, leaves, gravel and mud (CC0) | TinyWorlds |
+| копание, кирка, топор, шаги по траве, крафт, инвентарь, сундук, еда, всплеск | Cozy Farm SFX — **CC-BY 4.0** | roberto mellado |
+| камень (ломание) | Breaking Rock (CC0) | themightyglider |
+| щелчки кнопок | 51 UI sound effects (CC0) | Kenney |
+| сундук | Open chest SFX (CC0) | Oiboo |
+| двери | 4 Door Closes (CC0) | StarNinjas |
+| свинья | Pig SFX pack — **CC-BY 3.0** | Vinrax |
+| курица | Chicken Sound Effect — **CC-BY 3.0** | IMadeIt |
+| овца | Sheep sound bleats (Yo Frankie!) — **CC-BY 3.0** | Lamoot |
+| корова, свинья, овца, ягнёнок | Farm Animals (Mudchute) — **CC-BY-SA 3.0** | qubodup |
+| треск огня | Fire Crackling (CC0) | AntumDeluge |
+| птицы | Ambient Bird Sounds (CC0) | isaiah658 |
+| сверчки | Crickets ambient noise (CC0) | Wolfgang_ |

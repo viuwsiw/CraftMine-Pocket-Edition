@@ -567,3 +567,12 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 .armor-row .islot { width: calc((100% - 32px) / 9); flex: none; }
 .armor-row .islot.empty-armor { background-image: var(--ghost); background-size: 70% 70%; background-repeat: no-repeat; background-position: center; image-rendering: pixelated; }
 .armor-label { flex: 1; font-size: clamp(8px, 1.8vmin, 12px); color: #ddd; text-align: right; padding-right: 8px; }
+
+/* ---- Прицел в центре экрана (как в Minecraft): светлый крестик с тёмной обводкой ---- */
+#crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; transform: translate(-50%, -50%); pointer-events: none; z-index: 1; }
+#crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,0.85); box-shadow: 0 0 0 1px rgba(0,0,0,0.45); }
+#crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+#crosshair::after { left: 0; top: 10px; width: 22px; height: 2px; }
+#hud.inv-open #crosshair, #hud.third #crosshair { display: none; }
+
+.hint.credits { color: #aaa; text-align: left; line-height: 1.6; margin-top: 6px; }

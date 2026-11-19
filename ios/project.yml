@@ -22,7 +22,7 @@ targets:
       properties:
         CFBundleDisplayName: CraftMine PE
         CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "9"
+        CFBundleVersion: "10"
         UILaunchScreen: {}
         UIRequiresFullScreen: true
         UIStatusBarHidden: true
@@ -43,7 +43,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.craftmine.pe
         MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "9"
+        CURRENT_PROJECT_VERSION: "10"
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

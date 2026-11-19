@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """CraftMine PE: import free (CC0) sound packs into sounds/.
 
-Usage: python3 tools/import-sounds.py <folder with the unpacked packs>
+Usage: python3 tools/import-sounds.py <folder with the unpacked packs> <folder with the second batch>
 Each sound is trimmed (leading silence, max length), made mono 22 kHz, loudness-normalised and saved as
 sounds/<event>_<n>.mp3. The game embeds sounds/ into js/sound_pack.js (tools/pack-sounds.py, run by android/build.sh).
 All source packs are CC0 (public domain) from OpenGameArt.org; see sounds/README.md for the list.
@@ -11,6 +11,7 @@ import subprocess
 import sys
 
 SRC = sys.argv[1]
+SRC2 = sys.argv[2] if len(sys.argv) > 2 else None
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'sounds')
 
@@ -51,6 +52,44 @@ MAP = {
     'mob_spider': [('insectoralienshort_0/insectoralienshort_0.flac', 0.6, ''), (CR + 'bug_01.ogg', 0.6, ''), (CR + 'bug_04.ogg', 0.6, '')],
 }
 
+# ---- вторая партия (build 10): записи настоящих животных, шаги, клики, сундук, фон ----
+FS2 = '2:footsteps_0/footsteps/'
+KD = '2:[kdd]DifferentSteps_0/'
+CZ = '2:cozy-farm-sfx-cc-by_0/cozy-farm-sfx/sfx/'
+MU = '2:mudchuteanimals/MudchuteAnimals/'
+CHK = '2:chicken_sound_effect/Chicken Sound Effect.ogg'
+MAP.update({
+    'step_grass': [(FS2 + f'grass/{n}.ogg', 0.45, '') for n in range(6)] + [(CZ + 'step-grass.wav', 0.4, '')],
+    'step_gravel': [(FS2 + f'gravel/{n}.ogg', 0.45, '') for n in range(5)] + [(KD + 'gravel.ogg', 0.45, '')],
+    'step_wood': [(FS2 + f'wood/{n}.ogg', 0.4, '') for n in range(5)] + [(KD + f'wood0{n}.ogg', 0.4, '') for n in (1, 2, 3)],
+    'step_stone': MAP['step_stone'] + [(KD + 'stone01.ogg', 0.4, '')],
+    'step_water': [(FS2 + f'water/{n}.ogg', 0.5, '') for n in range(4)],
+    'step_wool': [(CZ + 'bush-rustle.wav', 0.35, 'lowpass=f=1200,volume=0.8'), (KD + 'leaves01.ogg', 0.35, 'lowpass=f=1500')],
+    'dig_grass': [(KD + 'mud02.ogg', 0.35, ''), (CZ + 'hoe-dig.wav', 0.4, ''), (CZ + 'hoe-dig-2.wav', 0.4, '')],
+    'break_grass': [(CZ + 'hoe-dig.wav', 0.5, ''), (KD + 'mud02.ogg', 0.5, ''), (CZ + 'bush-rustle.wav', 0.5, '')],
+    'dig_stone': MAP['dig_stone'] + [(CZ + 'pickaxe-rock.wav', 0.35, '')],
+    'break_stone': MAP['break_stone'] + [('2:rock_break/rock_break.ogg', 0.7, ''), (CZ + 'rock-break.wav', 0.7, '')],
+    'dig_wood': MAP['dig_wood'] + [(CZ + 'axe-chop.wav', 0.4, '')],
+    'click': [(f'2:UI_SFX_Set/click{n}.wav', 0.15, 'volume=0.7') for n in (1, 2, 3)],
+    'mob_pig': [(f'2:pig_idle{s}/pig_idle{s}.mp3', 1.0, '') for s in ('', '2', '3', '4')] + [(MU + f'Mudchute_pig_{n}.ogg', 0.5, '') for n in (1, 2)],
+    'mobhurt_pig': [(f'2:pig_hit{n}/pig_hit{n}.mp3', 0.6, '') for n in (1, 2)],
+    'mob_chicken': [(CHK, 0.62, ''), (CHK + '@0.68', 0.7, ''), (CHK + '@1.56', 1.05, '')],
+    'mob_sheep': [('2:sheep1/sheep1.flac', 1.2, ''), ('2:sheep2/sheep2.flac', 1.1, ''), ('2:sheepBleet/sheepBleet.flac', 1.1, ''), (MU + 'Mudchute_sheep_1.ogg', 1.1, ''), (MU + 'Mudchute_lamb_1.ogg', 0.6, '')],
+    'mobhurt_sheep': [('2:sheepHit/sheepHit.flac', 0.7, '')],
+    'mob_cow': [(MU + 'Mudchute_cow_1.ogg', 2.0, ''), (MU + 'Mudchute_cow_1.ogg', 1.6, 'asetrate=22050*0.92,aresample=22050'), (MU + 'Mudchute_cow_1.ogg', 1.6, 'asetrate=22050*1.08,aresample=22050')],
+    'door': MAP['door'] + [(f'2:door_close_-_starninjas/door.{n}.ogg', 0.6, '') for n in (1, 2, 3)],
+    'chest_open': [('2:open_chest_0/open_chest_0.wav', 0.8, ''), (CZ + 'chest-open.wav', 0.8, '')],
+    'eat': MAP['eat'] + [(CZ + 'eat.wav', 0.6, '')],
+    'pop': MAP['pop'] + [(CZ + 'pickup-item.wav', 0.3, '')],
+    'splash': MAP['splash'] + [(CZ + 'splash.wav', 0.9, '')],
+    'craft': [(CZ + 'craft.wav', 0.8, '')],
+    'inv_open': [(CZ + 'inventory-open.wav', 0.4, '')],
+    'inv_close': [(CZ + 'menu-close.wav', 0.4, '')],
+    'amb_birds': [('2:birds-isaiah658/birds-isaiah658.ogg', 20, 'volume=0.6')],
+    'amb_crickets': [('2:crickets_1/crickets_1.mp3', 11, 'volume=2.2')],
+    'amb_fire': [('2:fire-1/fire-1.ogg', 3.4, '')],
+})
+
 os.makedirs(OUT, exist_ok=True)
 for f in os.listdir(OUT):
     if f.endswith(('.ogg', '.mp3')):
@@ -58,16 +97,20 @@ for f in os.listdir(OUT):
 total = 0
 for event, items in MAP.items():
     for i, (rel, dur, extra) in enumerate(items, 1):
-        src = os.path.join(SRC, rel)
+        start = 0.0
+        if '@' in rel: rel, start = rel.rsplit('@', 1)[0], float(rel.rsplit('@', 1)[1])
+        src = os.path.join(SRC2, rel[2:]) if rel.startswith('2:') else os.path.join(SRC, rel)
         if not os.path.exists(src):
             print('missing', rel, file=sys.stderr)
             continue
         dst = os.path.join(OUT, f'{event}_{i}.mp3')  # MP3 понимают и Android, и iOS
-        af = 'aresample=22050,silenceremove=start_periods=1:start_threshold=-40dB'
+        af = f'aresample=22050,atrim=start={start},asetpts=PTS-STARTPTS,silenceremove=start_periods=1:start_threshold=-40dB'
+        if event.startswith('amb_'): af = 'aresample=22050'  # фоновые петли — без обрезки тишины
         if extra:
             af += ',' + extra
-        af += f',atrim=0:{dur},afade=t=out:st={max(0, dur - 0.06):.2f}:d=0.06,loudnorm=I=-16:TP=-1.5'
+        fade = 0.4 if event.startswith('amb_') else 0.06
+        af += f',atrim=0:{dur},afade=t=out:st={max(0, dur - fade):.2f}:d={fade}' + ('' if event.startswith('amb_') else ',loudnorm=I=-16:TP=-1.5')
         subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', src, '-ac', '1', '-af', af, '-ar', '22050',
-                        '-c:a', 'libmp3lame', '-b:a', '40k', dst], check=True)
+                        '-c:a', 'libmp3lame', '-b:a', '32k' if event.startswith('amb_') else '40k', dst], check=True)
         total += os.path.getsize(dst)
 print(f'sounds/: {sum(len(v) for v in MAP.values())} files, {total // 1024} KB')
