@@ -97,11 +97,9 @@ final class NetBridge: NSObject, WKScriptMessageHandler {
             let params = NWParameters.tcp
             params.allowLocalEndpointReuse = true
             let l = try NWListener(using: params, on: NetBridge.port)
-            var txt = NWTXTRecord()
-            txt["name"] = name
-            txt["world"] = String(world.prefix(60))
             myServiceName = "CraftMine " + String(name.prefix(30))
-            l.service = NWListener.Service(name: myServiceName, type: NetBridge.service, domain: nil, txtRecord: txt.data)
+            let txt = NetBridge.txtData(["name": name, "world": String(world.prefix(60))])
+            l.service = NWListener.Service(name: myServiceName, type: NetBridge.service, domain: nil, txtRecord: txt)
             l.newConnectionHandler = { [weak self] conn in self?.accept(conn) }
             l.stateUpdateHandler = { [weak self] state in
                 if case .failed(let err) = state {
@@ -247,6 +245,18 @@ final class NetBridge: NSObject, WKScriptMessageHandler {
         }
         b.start(queue: queue)
         browser = b
+    }
+
+    /// TXT-запись Bonjour вручную (NWTXTRecord.data есть только с iOS 16): байт длины + "ключ=значение"
+    static func txtData(_ entries: [String: String]) -> Data {
+        var d = Data()
+        for (k, v) in entries {
+            var e = Array((k + "=" + v).utf8)
+            if e.count > 255 { e = Array(e.prefix(255)) }
+            d.append(UInt8(e.count))
+            d.append(contentsOf: e)
+        }
+        return d
     }
 
     // MARK: - IP
