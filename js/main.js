@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 10';
+  const VERSION = '0.1.0 alpha build 11';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -86,6 +86,7 @@
   function refreshTextures() {
     CM.Textures.makeFastLeaves();
     renderer.updateAtlas();
+    if (typeof pvRenderer !== 'undefined' && pvRenderer) pvRenderer.updateAtlas();
     CM.Geo.clearSpriteCache();
     if (typeof Items !== 'undefined' && Items) {
       Items.buildIcons();
@@ -327,7 +328,7 @@
       if (s.kind === 'armor') s.el.classList.toggle('empty-armor', !s.arr[s.i]);
     }
     const al = document.querySelector('.armor-label');
-    if (al) al.textContent = `Броня: ${inv.armorPoints()} / 20`;
+    if (al) al.textContent = `Броня ${inv.armorPoints()}/20`;
     for (const r of recipeEls) {
       const can = inv.canCraft(r.r);
       r.el.classList.toggle('no', !can);
@@ -428,16 +429,33 @@
     } else if (invSection === 'chest') {
       for (let i = 0; i < 27; i++) grid.appendChild(makeSlot(invTile.slots, i, 'chest'));
     } else if (invSection === 'inv') {
-      // броня: 4 ячейки над сумкой
-      const row = document.createElement('div');
-      row.className = 'armor-row';
-      const lab = document.createElement('span');
+      // как в Minecraft: слева броня столбиком и персонаж в ней (можно крутить пальцем), справа сумка
+      const wrap = document.createElement('div');
+      wrap.className = 'inv-with-doll';
+      const doll = document.createElement('div');
+      doll.className = 'paperdoll';
+      const col = document.createElement('div');
+      col.className = 'armor-col';
+      for (let k = 0; k < 4; k++) { const el = makeSlot(inv.armor, k, 'armor'); el.style.setProperty('--ghost', `url(${armorGhost(k)})`); col.appendChild(el); }
+      const view = document.createElement('div');
+      view.className = 'doll-view';
+      view.appendChild(previewCanvas());
+      const lab = document.createElement('div');
       lab.className = 'armor-label';
-      lab.textContent = `Броня: ${inv.armorPoints()} / 20`;
-      row.appendChild(lab);
-      for (let k = 0; k < 4; k++) { const el = makeSlot(inv.armor, k, 'armor'); el.dataset.piece = k; el.style.setProperty('--ghost', `url(${armorGhost(k)})`); row.appendChild(el); }
-      content.appendChild(row);
+      view.appendChild(lab);
+      doll.append(col, view);
       for (let i = 9; i < 36; i++) grid.appendChild(makeSlot(inv.slots, i, 'inv'));
+      wrap.append(doll, grid);
+      content.appendChild(wrap);
+      // 4 ячейки брони должны влезть по высоте: размер ячейки — от высоты окна, персонаж рядом примерно в 1,6 ячейки
+      const fit = () => {
+        const h = content.clientHeight - 12, cell = Math.max(28, Math.floor((h - 12) / 4));
+        col.style.width = cell + 'px';
+        doll.style.height = (cell * 4 + 12) + 'px';
+        doll.style.width = Math.round(cell * 2.7) + 'px';
+      };
+      fit();
+      requestAnimationFrame(fit);
     }
     if (invSection === 'furnace') {
       const f = document.createElement('div');
@@ -451,7 +469,7 @@
       f.append(c1, arrow, c2);
       content.appendChild(f);
       furnaceEls = { flame: flame.firstChild, arrow: arrow.firstChild };
-    } else content.appendChild(grid);
+    } else if (invSection !== 'inv') content.appendChild(grid);
     if (cats) cats.forEach((c, k) => lt.appendChild(tabButton(c.icon(), c.name, k === invCat, () => { invCat = k; selRecipe = null; renderInv(); })));
     content.scrollTop = 0;
     syncInv();
@@ -1188,6 +1206,30 @@
     if (lavaT > 0.2) { lavaT = 0; shift(CM.TILES.lava, 0, 1); }
   }
 
+  // Персонаж в инвентаре: отдельный маленький WebGL-холст, рисуется каждый кадр, пока открыт раздел «Инвентарь»
+  let crossShown = null;
+  let pvCanvas = null, pvRenderer = null, pvYaw = 0.45, pvDrag = null;
+  function previewCanvas() {
+    if (!pvCanvas) {
+      pvCanvas = document.createElement('canvas');
+      pvCanvas.className = 'doll-canvas';
+      try { pvRenderer = new CM.Renderer(pvCanvas, true); } catch (_) { pvRenderer = null; }
+      pvCanvas.addEventListener('pointerdown', (e) => { pvDrag = e.clientX; try { pvCanvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ } });
+      pvCanvas.addEventListener('pointermove', (e) => { if (pvDrag === null) return; pvYaw -= (e.clientX - pvDrag) * 0.02; pvDrag = e.clientX; });
+      for (const ev of ['pointerup', 'pointercancel']) pvCanvas.addEventListener(ev, () => { pvDrag = null; });
+    }
+    return pvCanvas;
+  }
+  function drawPreview(now) {
+    if (!pvRenderer || state !== 'inventory' || invSection !== 'inv' || !pvCanvas.isConnected) return;
+    const out = [];
+    const who = { pos: [0, 0, 0], yaw: pvYaw + (pvDrag === null ? Math.sin(now / 1800) * 0.12 : 0) };
+    const anim = { swing: 0, headPitch: Math.sin(now / 1300) * 0.08, armor: armorMats(), held: heldItem(), sneak: false };
+    CM.Models.build(out, 'player', 0, 0, 0, who.yaw, anim, 1);
+    CM.Models.held(out, heldItem(), who, anim);
+    pvRenderer.drawPreview(new Float32Array(out));
+  }
+
   // Пустая ячейка брони: серый силуэт части (как в Minecraft), а не картинка железной брони
   const ghostCache = {};
   function armorGhost(k) {
@@ -1697,6 +1739,9 @@
     updateAmbient(dt);
     const extras = interact(dt, cam, now);
     animateLiquids(dt);
+    drawPreview(now);
+    const showCross = state === 'game' && !thirdPerson;
+    if (showCross !== crossShown) { crossShown = showCross; $('crosshair').style.display = showCross ? '' : 'none'; }
     swing = Math.max(0, swing - dt * 3.5);
     bowCd = Math.max(0, bowCd - dt);
     const sky = dayLight();

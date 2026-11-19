@@ -392,6 +392,31 @@ void main() {
     }
 
     // Изометрическая иконка предмета (только для рендерера, созданного с iconMode)
+    // Персонаж в инвентаре: модель (вершины уже в координатах модели, ноги в 0) на прозрачном фоне
+    drawPreview(verts) {
+      const gl = this.gl, c = this.canvas;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.max(1, Math.round(c.clientWidth * dpr)), h = Math.max(1, Math.round(c.clientHeight * dpr));
+      if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+      gl.viewport(0, 0, w, h);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      const aspect = w / h, fov = 28 * Math.PI / 180;
+      // камера спереди (модель смотрит в -Z), расстояние такое, чтобы персонаж 2 блока ростом влез по высоте
+      const dist = 1.08 / Math.tan(fov / 2) * Math.max(1, 0.58 / aspect);
+      gl.uniformMatrix4fv(this.u.uProj, false, perspective(fov, aspect, 0.1, 50));
+      gl.uniformMatrix4fv(this.u.uView, false, lookDir([0, 0.98, -dist], [0, 0, 1]));
+      gl.uniform3f(this.u.uOffset, 0, 0, 0);
+      gl.uniform1f(this.u.uFogNear, 100);
+      gl.uniform1f(this.u.uFogFar, 200);
+      gl.uniform3f(this.u.uTint, 1, 1, 1);
+      gl.uniform1f(this.u.uAlphaTest, 0.5);
+      gl.disable(gl.BLEND);
+      gl.disable(gl.CULL_FACE);
+      gl.enable(gl.DEPTH_TEST);
+      this._drawDynamic(verts, gl.TRIANGLES);
+    }
+
     drawIcon(shape) {
       const gl = this.gl;
       const w = this.canvas.width, h = this.canvas.height;

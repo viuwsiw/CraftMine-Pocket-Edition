@@ -576,3 +576,14 @@ button.player-tag:active { background: rgba(0,0,0,0.6); }
 #hud.inv-open #crosshair, #hud.third #crosshair { display: none; }
 
 .hint.credits { color: #aaa; text-align: left; line-height: 1.6; margin-top: 6px; }
+
+/* ---- Инвентарь как в Minecraft: броня столбиком + персонаж, справа сумка ---- */
+.inv-with-doll { display: flex; gap: 8px; align-items: stretch; }
+.inv-with-doll .inv-grid { flex: 1; min-width: 0; align-content: start; }
+.paperdoll { flex: none; display: flex; gap: 5px; }
+.armor-col { display: flex; flex-direction: column; justify-content: space-between; gap: 4px; flex: none; }
+.armor-col .islot { width: 100%; }
+.armor-col .islot.empty-armor { background-image: var(--ghost); background-size: 70% 70%; background-repeat: no-repeat; background-position: center; image-rendering: pixelated; }
+.doll-view { flex: 1; position: relative; background: radial-gradient(ellipse at 50% 85%, #4a4545 0%, #262323 70%); border: 2px solid #141414; box-shadow: inset 2px 2px 0 #111; min-height: 0; }
+.doll-canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.doll-view .armor-label { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; padding: 0; font-size: clamp(7px, 1.6vmin, 11px); color: #e8e8e8; text-shadow: 1px 1px 0 #000; pointer-events: none; }
