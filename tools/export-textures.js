@@ -106,7 +106,7 @@ ${table(d.items, false)}
     for (const name of Object.keys(CM.TILES)) {
       if (inCombined.has(name) || /_fast$/.test(name)) continue; // *_fast — сплошная листва, делается из обычной при запуске
       let dir = 'blocks';
-      if (itemTiles.has(name)) dir = 'items';
+      if (itemTiles.has(name) || /^bow_pulling/.test(name)) dir = 'items';
       else if (/^(pig|cow|sheep|chicken|zombie|skel|creeper|spider)_/.test(name)) dir = 'mobs';
       else if (/^(pl|armor)_/.test(name) || name === 'skin') dir = 'player';
       else if (MISC.includes(name)) dir = 'misc';
