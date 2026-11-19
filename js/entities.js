@@ -96,10 +96,10 @@
       { c: [6, 18, 0], s: [4, 12, 4], t: [T.pl_arm, T.pl_arm, T.pl_body, T.skin, T.pl_arm, T.pl_arm], pivot: [6, 22, 0], swing: 1, arm: 'R', upper: true },
       { c: [0, 28, 0], s: [8, 8, 8], t: [T.pl_head_side, T.pl_head_side, T.pl_head_top, T.skin, T.pl_head_back, T.pl_face], pivot: [0, 24, 0], head: true, upper: true },
       // броня поверх (показывается, если надета): 0 шлем, 1 нагрудник, 2 поножи, 3 ботинки
-      { c: [0, 28.5, 0], s: [9, 9, 9], pivot: [0, 24, 0], head: true, upper: true, armor: 0 },
+      { c: [0, 30.4, 0], s: [9, 4.6, 9], pivot: [0, 24, 0], head: true, upper: true, armor: 0 },
       { c: [0, 18, 0], s: [9, 12.6, 5], upper: true, armor: 1 },
-      { c: [-6, 19, 0], s: [4.8, 6.5, 4.8], pivot: [-6, 22, 0], swing: -1, arm: 'L', upper: true, armor: 1 },
-      { c: [6, 19, 0], s: [4.8, 6.5, 4.8], pivot: [6, 22, 0], swing: 1, arm: 'R', upper: true, armor: 1 },
+      { c: [-6, 20.6, 0], s: [5, 7.4, 5], pivot: [-6, 22, 0], swing: -1, arm: 'L', upper: true, armor: 1 },
+      { c: [6, 20.6, 0], s: [5, 7.4, 5], pivot: [6, 22, 0], swing: 1, arm: 'R', upper: true, armor: 1 },
       { c: [-2, 7.5, 0], s: [4.6, 9.2, 4.6], pivot: [-2, 12, 0], swing: 1, armor: 2 },
       { c: [2, 7.5, 0], s: [4.6, 9.2, 4.6], pivot: [2, 12, 0], swing: -1, armor: 2 },
       { c: [-2, 1.6, 0], s: [4.9, 3.4, 4.9], pivot: [-2, 12, 0], swing: 1, armor: 3 },
@@ -122,6 +122,7 @@
       if (p.head) a = anim.headPitch || 0;
       else if (p.swing) a = p.swing * (anim.swing || 0);
       if (p.arm === 'R' && anim.armSwing) a = anim.armSwing;
+      if (p.arm && anim.aim > 0.05) a = p.arm === 'R' ? 1.5 : 1.35; // натягивает лук — руки вперёд
       if (p.pose) a += p.pose;
       const ca = Math.cos(a), sa = Math.sin(a), pv = p.pivot;
       const cr = p.roll ? Math.cos(p.roll) : 1, sr = p.roll ? Math.sin(p.roll) : 0;
@@ -162,6 +163,37 @@
     }, 1);
     for (let k = 0; k < v.length; k++) out.push(v[k]);
   }
+
+  // Предмет в правой руке персонажа (вид от третьего лица и другие игроки)
+  function heldItem(out, id, who, anim) {
+    if (!id || !CM.Items.ITEMS[id] && !CM.BLOCKS[id]) return;
+    const sc = MODELS.player.scale, cy = Math.cos(who.yaw), sy = Math.sin(who.yaw);
+    let a = (anim.swing || 0);
+    if (anim.armSwing) a = anim.armSwing;
+    if (anim.aim > 0.05) a = 1.5;
+    const ca = Math.cos(a), sa = Math.sin(a);
+    // кисть: конец правой руки (плечо [6, 22, 0], длина 11)
+    const toWorld = (mx, my, mz) => {
+      const ry = my - 22, rz = mz;
+      const Y = 22 + ry * ca - rz * sa, Z = ry * sa + rz * ca;
+      const X = mx * sc, YY = Y * sc - (anim.sneak ? 2 * sc : 0), ZZ = Z * sc;
+      return [who.pos[0] + X * cy + ZZ * sy, who.pos[1] + YY, who.pos[2] - X * sy + ZZ * cy];
+    };
+    const tile = CM.Items.sprite(id);
+    let v;
+    if (tile !== null && tile !== undefined) {
+      const isBow = id === I.BOW;
+      const t = isBow && anim.aim > 0.05 ? T['bow_pulling_' + Math.min(2, Math.floor(anim.aim * 2.99))] : tile;
+      const size = 14;
+      // плоскость предмета вдоль руки: ширина картинки — вперёд, высота — вверх
+      v = Geo.spriteVerts(t, (p) => toWorld(6 + (p[2] - 0.5) * 1.2, 11 + (p[1] - 0.25) * size, -2 - (p[0] - 0.25) * size), 1);
+    } else {
+      const s = 5;
+      v = Geo.itemVerts(CM.Items.itemShape(id), (p) => toWorld(6 + (p[0] - 0.5) * s, 10 + (p[1] - 0.5) * s, -3 + (p[2] - 0.5) * s), 1);
+    }
+    for (let k = 0; k < v.length; k++) out.push(v[k]);
+  }
+  CM.Models = CM.Models || {};
 
   // ---------- Выпавший предмет ----------
   class ItemDrop extends CM.Body {
@@ -393,8 +425,14 @@
     }
 
     // Стрела игрока из лука: o — откуда, d — направление; pickup — можно подобрать
-    shootFrom(o, d, speed, player, creative) {
-      (this.arrows || (this.arrows = [])).push({ pos: [o[0] + d[0] * 0.6, o[1] + d[1] * 0.6 - 0.1, o[2] + d[2] * 0.6], vel: d.map((v) => v * speed), age: 0, stuck: false, player: true, pickup: !creative });
+    shootFrom(o, d, speed, player, creative, dmg) {
+      const ar = { pos: [o[0] + d[0] * 0.6, o[1] + d[1] * 0.6 - 0.1, o[2] + d[2] * 0.6], vel: d.map((v) => v * speed), age: 0, stuck: false, player: true, pickup: !creative, dmg: dmg || 6 };
+      (this.arrows || (this.arrows = [])).push(ar);
+      return ar;
+    }
+    // Стрела другого игрока (сетевая игра): летит у всех, ранит мобов и местного игрока
+    remoteArrow(o, v, dmg) {
+      (this.arrows || (this.arrows = [])).push({ pos: o.slice(), vel: v.slice(), age: 0, stuck: false, remote: true, dmg: dmg || 6 });
     }
 
     // Стрела скелета: летит по дуге в игрока
@@ -492,10 +530,18 @@
           if (ctx.sound) ctx.sound('arrow_hit', ar.pos);
           continue;
         }
-        if (ar.player) {
+        if (ar.remote) {
+          const qx = ar.pos[0] - pl.pos[0], qz = ar.pos[2] - pl.pos[2], qy = ar.pos[1] - pl.pos[1];
+          if (Math.abs(qx) < 0.45 && Math.abs(qz) < 0.45 && qy > 0 && qy < 1.9) {
+            ctx.hurtPlayer(ar.dmg, [ar.pos[0] - ar.vel[0], ar.pos[1], ar.pos[2] - ar.vel[2]]);
+            this.arrows.splice(i, 1);
+            continue;
+          }
+        }
+        if (ar.player || ar.remote) {
           const hitM = this.mobs.find((m) => Math.abs(ar.pos[0] - m.pos[0]) < m.hw + 0.15 && Math.abs(ar.pos[2] - m.pos[2]) < m.hw + 0.15 && ar.pos[1] > m.pos[1] && ar.pos[1] < m.pos[1] + m.h + 0.1);
           if (hitM) {
-            this.hitMob(hitM, 6, [ar.pos[0] - ar.vel[0], ar.pos[1], ar.pos[2] - ar.vel[2]]);
+            this.hitMob(hitM, ar.dmg || 6, [ar.pos[0] - ar.vel[0], ar.pos[1], ar.pos[2] - ar.vel[2]]);
             if (ctx.sound) ctx.sound('hit', ar.pos);
             this.arrows.splice(i, 1);
           }
@@ -537,7 +583,9 @@
       }
       // Другие игроки в сетевой игре
       for (const r of this.remote || []) {
-        buildModel(normal, 'player', r.pos[0], r.pos[1], r.pos[2], r.yaw, { swing: Math.sin(r.walk || 0) * 0.7 * Math.min(1, r.speed || 0), headPitch: r.pitch, sneak: r.sneak, armor: r.armor }, 1);
+        const an = { swing: Math.sin(r.walk || 0) * 0.7 * Math.min(1, r.speed || 0), headPitch: r.pitch, sneak: r.sneak, armor: r.armor, aim: r.aim, held: r.held };
+        buildModel(normal, 'player', r.pos[0], r.pos[1], r.pos[2], r.yaw, an, 1);
+        heldItem(normal, r.held, r, an);
       }
       for (const it of this.items) {
         const a = it.spin + it.age * 1.8, ca = Math.cos(a), sa = Math.sin(a);
@@ -557,7 +605,7 @@
     }
   }
 
-  CM.Models = { build: buildModel };
+  CM.Models = { build: buildModel, held: heldItem };
   CM.Entities = Entities;
   CM.Mob = Mob;
 })(window.CM);

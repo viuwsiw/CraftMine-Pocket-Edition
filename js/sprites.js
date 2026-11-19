@@ -294,7 +294,7 @@
   const ITX = { rotten_flesh: '#8a5a3a', gunpowder: '#5a5a5a', string: '#e8e8e8', bone: '#ecebdc', arrow: '#9a9aa0',
     leather: '#8c5434',
     ...Object.fromEntries(['leather', 'iron', 'gold', 'diamond'].flatMap((m, i) => ['helmet', 'chestplate', 'leggings', 'boots'].map((p) => [m + '_' + p, ['#8c5434', '#c8c8c8', '#f2cf3a', '#4fe0d4'][i]]))),
-    bow: '#8a6234', flint: '#3a3a40', flint_and_steel: '#9a9aa0', shears: '#d8d8dc', feather: '#f4f4f4',
+    bow: '#8a6234', bow_pulling_0: '#8a6234', bow_pulling_1: '#8a6234', bow_pulling_2: '#8a6234', flint: '#3a3a40', flint_and_steel: '#9a9aa0', shears: '#d8d8dc', feather: '#f4f4f4',
     egg_pig: '#f0a0a8', egg_cow: '#4a3424', egg_sheep: '#e8e8e8', egg_chicken: '#d8d8d8', egg_zombie: '#1f9090', egg_skeleton: '#c8c8c8', egg_creeper: '#3a9a2a', egg_spider: '#2e2628' };
   for (const n in ITX) { const c = hex(ITX[n]); paint(n, (x, y) => ((x - 7.5) ** 2 + (y - 7.5) ** 2 < 30 ? c : [0, 0, 0, 0])); }
 })(window.CM);

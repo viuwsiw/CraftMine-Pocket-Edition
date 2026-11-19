@@ -280,8 +280,11 @@
       if (hitH && this.sprinting && !this.flying) this.sprinting = false; // упёрся в стену — бег прекращается
       this.updateHunger(dt);
       this.walk = (this.walk || 0) + dt * Math.min(hs, 6) * 2.2; // фаза шага для модели (и в полёте, и в воде)
-      if (this.onGround && hs > 0.5) this.bob += dt * hs * 2.2;
-      else this.bob *= Math.pow(0.02, dt);
+      // Покачивание: фаза идёт только при ходьбе, а при остановке плавно гаснет амплитуда
+      // (раньше фаза уменьшалась сама — из-за этого камера дёргалась после долгой ходьбы)
+      const walking = this.onGround && hs > 0.5;
+      if (walking) this.bob += dt * hs * 2.2;
+      this.bobAmp = (this.bobAmp || 0) + ((walking ? 1 : 0) - (this.bobAmp || 0)) * Math.min(1, dt * (walking ? 6 : 4));
     }
 
     // Голод: полный (9+ окорочков) — лечит, пустой — отнимает здоровье (не ниже полсердца)
@@ -310,7 +313,7 @@
 
     camera() {
       const e = this.eye;
-      const bobY = Math.abs(Math.sin(this.bob)) * 0.06;
+      const bobY = Math.abs(Math.sin(this.bob)) * 0.06 * (this.bobAmp || 0);
       this.eyeDrop = (this.eyeDrop || 0) + (((this.sneaking && !this.flying) ? 0.3 : 0) - (this.eyeDrop || 0)) * 0.25; // присед — глаза ниже
       return { x: e[0], y: e[1] + bobY - this.eyeDrop, z: e[2], yaw: this.yaw, pitch: this.pitch };
     }

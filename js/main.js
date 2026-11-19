@@ -1,7 +1,7 @@
 'use strict';
 // CraftMine PE v0.1.0 alpha — экраны, игровой цикл
 (function (CM) {
-  const VERSION = '0.1.0 alpha build 8';
+  const VERSION = '0.1.0 alpha build 9';
   const DEFAULT_NICK = 'Nikita';
   const $ = (id) => document.getElementById(id);
 
@@ -434,7 +434,7 @@
       lab.className = 'armor-label';
       lab.textContent = `Броня: ${inv.armorPoints()} / 20`;
       row.appendChild(lab);
-      for (let k = 0; k < 4; k++) { const el = makeSlot(inv.armor, k, 'armor'); el.dataset.piece = k; el.style.setProperty('--ghost', `url(${iconOf(Items.armorId(1, k))})`); row.appendChild(el); }
+      for (let k = 0; k < 4; k++) { const el = makeSlot(inv.armor, k, 'armor'); el.dataset.piece = k; el.style.setProperty('--ghost', `url(${armorGhost(k)})`); row.appendChild(el); }
       content.appendChild(row);
       for (let i = 9; i < 36; i++) grid.appendChild(makeSlot(inv.slots, i, 'inv'));
     }
@@ -891,6 +891,7 @@
   let swing = 0;            // анимация взмаха рукой, 0..1
   let breakCooldown = 0;
   let bowCd = 0;            // перезарядка лука
+  let bowPull = 0, bowAim = null; // натяжение тетивы 0..1 и точка прицела
   let thirdPerson = false, viewMode = 0;
   let ents = null;
   let time = 0.05;          // время суток 0..1: 0 — рассвет, 0.25 — полдень, 0.5 — закат, 0.75 — полночь
@@ -899,7 +900,7 @@
 
   // Освещение и цвет неба по времени суток
   function dayLight() {
-    const t = creative ? 0.2 : time;
+    const t = time; // день и ночь идут и в творческом режиме
     const a = t * Math.PI * 2, s = Math.sin(a);
     const L = Math.max(0, Math.min(1, s * 3 + 0.6));
     const b = 0.22 + 0.78 * L;
@@ -956,20 +957,8 @@
     const { o, d, reach, hit } = castRay(cam, sx, sy);
     const mh = ents.rayMob(o, d, reach);
     const slot = inv.slots[selected], held = slot ? slot.id : 0;
-    // Лук: выстрел в сторону касания (в выживании нужна стрела)
-    if (held === CM.I.BOW) {
-      if (bowCd > 0) return;
-      if (!creative) {
-        if (inv.count(CM.I.ARROW) <= 0) { toast('Нет стрел'); return; }
-        inv.remove(CM.I.ARROW, 1);
-        renderHotbar();
-      }
-      ents.shootFrom(o, d, 30, true, creative);
-      bowCd = 0.55; swing = 0.6;
-      Snd.play('bow');
-      wearTool();
-      return;
-    }
+    // Лук: короткий тап — слабый выстрел; удержание — натянуть тетиву (см. interact)
+    if (held === CM.I.BOW) { fireBow(o, d, 0.35); return; }
     if (mh && (!hit || mh.t < hit.t)) {
       const t = Items.tool(held);
       // огниво: поджечь крипера — взорвётся через полторы секунды
@@ -1110,7 +1099,6 @@
   }
 
   function useBed() {
-    if (creative) { toast('В творческом режиме сон отключён'); return; }
     current.spawn = player.pos.slice();
     if (!dayLight().night) { toast('Спать можно только ночью. Точка возрождения сохранена.'); return; }
     state = 'sleep';
@@ -1172,6 +1160,20 @@
     if (lavaT > 0.2) { lavaT = 0; shift(CM.TILES.lava, 0, 1); }
   }
 
+  // Пустая ячейка брони: серый силуэт части (как в Minecraft), а не картинка железной брони
+  const ghostCache = {};
+  function armorGhost(k) {
+    if (ghostCache[k]) return ghostCache[k];
+    const tile = Items.sprite(Items.armorId(1, k)), TS = CM.Textures.tile, per = CM.Textures.perRow;
+    const c = document.createElement('canvas'); c.width = c.height = TS;
+    const g = c.getContext('2d');
+    g.drawImage(CM.Textures.atlas, (tile % per) * TS, Math.floor(tile / per) * TS, TS, TS, 0, 0, TS, TS);
+    const img = g.getImageData(0, 0, TS, TS), d = img.data;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 0) { d[i] = d[i + 1] = d[i + 2] = 22; d[i + 3] = 110; }
+    g.putImageData(img, 0, 0);
+    return (ghostCache[k] = c.toDataURL());
+  }
+
   // Урон с учётом брони: каждое очко брони — минус 4% урона (полная алмазная — минус 80%), броня изнашивается
   let dmgFrac = 0;
   function armorHurt(dmg) {
@@ -1201,7 +1203,7 @@
     player.vel[0] += dx / l * 5; player.vel[2] += dz / l * 5; player.vel[1] = Math.max(player.vel[1], 4);
   }
   // Ночь для мобов — когда солнце заметно ниже горизонта
-  function mobNight() { const s = Math.sin((creative ? 0.2 : time) * Math.PI * 2); return s < -0.15; }
+  function mobNight() { const s = Math.sin(time * Math.PI * 2); return s < -0.15; }
 
   // ---------- Динамит ----------
   const fuses = [];
@@ -1244,12 +1246,34 @@
     if (navigator.vibrate) try { navigator.vibrate(150); } catch (_) { /* ignore */ }
   }
 
+  // Выстрел из лука: power 0..1 — сила натяжения (скорость и урон стрелы)
+  function fireBow(o, d, power) {
+    if (bowCd > 0) return;
+    if (!creative) {
+      if (inv.count(CM.I.ARROW) <= 0) { toast('Нет стрел'); return; }
+      inv.remove(CM.I.ARROW, 1);
+      renderHotbar();
+    }
+    const speed = 12 + 26 * power, dmg = Math.round(2 + 7 * power);
+    const ar = ents.shootFrom(o, d, speed, true, creative, dmg);
+    if (net.host || net.client) netSend({ t: 'arrow', id: net.id, o: ar.pos.map((v) => +v.toFixed(2)), v: ar.vel.map((v) => +v.toFixed(2)), d: dmg });
+    bowCd = 0.35; swing = 0.4;
+    Snd.play('bow');
+    wearTool();
+  }
+
   // Обработка ломания/установки, возвращает данные для подсветки
   function interact(dt, cam, now) {
     const extras = { selection: null, crack: null };
     for (const t of controls.consumeTaps()) { if (state === 'game') useAt(cam, t.x, t.y); }
     if (state !== 'game') return extras;
     const g = controls.updateGesture(now);
+    // Лук: держишь палец — тетива натягивается (до 1 секунды), отпустил — выстрел туда, куда целился
+    if (heldItem() === CM.I.BOW) {
+      if (g) { bowPull = Math.min(1, bowPull + dt); bowAim = { x: g.x, y: g.y }; breaking = null; return extras; }
+      if (bowPull > 0.12 && bowAim) { const r = castRay(cam, bowAim.x, bowAim.y); fireBow(r.o, r.d, bowPull); }
+      bowPull = 0;
+    } else bowPull = 0;
     const aim = g || (controls.hover && !controls.touch ? controls.hover : null);
     const hit = aim ? pick(cam, aim.x, aim.y) : null;
     if (hit) extras.selection = hit;
@@ -1445,7 +1469,7 @@
       net.tPos += dt;
       if (net.tPos > 0.1 && net.peers.size) {
         net.tPos = 0;
-        netSend({ t: 'pos', id: net.id, p: player.pos.map((v) => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), s: player.sneaking ? 1 : 0, a: armorMats() });
+        netSend({ t: 'pos', id: net.id, p: player.pos.map((v) => Math.round(v * 100) / 100), yaw: +player.yaw.toFixed(3), pitch: +player.pitch.toFixed(3), s: player.sneaking ? 1 : 0, a: armorMats(), h: heldItem(), b: +bowPull.toFixed(1) });
       }
       if (net.host) { net.tTime += dt; if (net.tTime > 5) { net.tTime = 0; netSend({ t: 'time', v: time }); } }
     }
@@ -1472,8 +1496,11 @@
         updatePauseNet();
       } else if (m.t === 'pos') {
         const r = net.peers.get(from);
-        if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; r.armor = m.a; }
-        NET.sendExcept(from, JSON.stringify({ t: 'pos', id: from, p: m.p, yaw: m.yaw, pitch: m.pitch, s: m.s, a: m.a }));
+        if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; r.armor = m.a; r.held = m.h; r.aim = m.b; }
+        NET.sendExcept(from, JSON.stringify({ t: 'pos', id: from, p: m.p, yaw: m.yaw, pitch: m.pitch, s: m.s, a: m.a, h: m.h, b: m.b }));
+      } else if (m.t === 'arrow') {
+        ents.remoteArrow(m.o, m.v, m.d);
+        NET.sendExcept(from, JSON.stringify(m));
       } else if (m.t === 'set') {
         if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true);
         NET.sendExcept(from, JSON.stringify({ t: 'set', x: m.x, y: m.y, z: m.z, b: m.b }));
@@ -1490,7 +1517,8 @@
       toast(`Ты в мире игрока ${cleanNick(m.host)}`, 3000);
     } else if (m.t === 'pos') {
       const r = net.peers.get(m.id);
-      if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; r.armor = m.a; }
+      if (r) { r.tpos = m.p; r.yaw = m.yaw; r.pitch = m.pitch; r.sneak = !!m.s; r.armor = m.a; r.held = m.h; r.aim = m.b; }
+    } else if (m.t === 'arrow') { ents.remoteArrow(m.o, m.v, m.d);
     } else if (m.t === 'set') { if (world) world.setBlock(m.x | 0, m.y | 0, m.z | 0, m.b | 0, true); }
     else if (m.t === 'join') { addPeer(m.id, m.name); toast(`${cleanNick(m.name)} присоединился к игре`); }
     else if (m.t === 'leave') removePeer(m.id);
@@ -1600,7 +1628,7 @@
       }
       if (now - lastSave > 10000) { savePlayer(); lastSave = now; }
       if (settings.showCoords) {
-        const p = player.pos, h = ((creative ? 0.2 : time) * 24 + 6) % 24;
+        const p = player.pos, h = (time * 24 + 6) % 24;
         $('debug').textContent =
           `CraftMine PE ${VERSION}\n${nick()}  ${fps} FPS\nXYZ: ${p[0].toFixed(1)} / ${p[1].toFixed(1)} / ${p[2].toFixed(1)}\n` +
           `Время: ${String(Math.floor(h)).padStart(2, '0')}:${String(Math.floor(h % 1 * 60)).padStart(2, '0')}  Животных: ${ents.mobs.length}\n` +
@@ -1626,7 +1654,7 @@
       tickFurnaces(dt);
       tickFuses(dt);
       world.tick(dt);
-      if (!creative) time = (time + dt / DAY_LEN) % 1;
+      if (!net.client) time = (time + dt / DAY_LEN) % 1; // у клиента время присылает хозяин
       if (state === 'inventory' && (furnaceEls || invSection === 'inv')) syncInv();
     }
 
@@ -1648,12 +1676,16 @@
     const hs = Math.hypot(player.vel[0], player.vel[2]);
     if (thirdPerson) {
       const sw = Math.sin(player.walk) * 0.9 * Math.min(1, hs / 2); // ноги и руки двигаются и в полёте
+      const myAnim = { swing: Math.sin(player.walk) * 0.9 * Math.min(1, hs / 2), headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0, sneak: player.sneaking, armor: armorMats(), held: heldItem(), aim: bowPull };
+      CM.Models.held(m.normal, heldItem(), player, myAnim);
       CM.Models.build(m.normal, 'player', player.pos[0], player.pos[1], player.pos[2], player.yaw,
-        { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0, sneak: player.sneaking, armor: armorMats() }, 1);
+        { swing: sw, headPitch: player.pitch, armSwing: swing > 0 ? Math.sin(swing * Math.PI) * 1.4 : 0, sneak: player.sneaking, armor: armorMats(), held: heldItem(), aim: bowPull }, 1);
     } else {
       const slot = inv.slots[selected], held = slot ? slot.id : 0;
-      const hand = { swing, bobX: Math.sin(player.bob) * 0.025 * Math.min(1, hs), bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * Math.min(1, hs), light: player.headInWater ? 0.7 : 1 };
+      const ba = player.bobAmp || 0;
+      const hand = { swing, bobX: Math.sin(player.bob) * 0.025 * ba, bobY: -Math.abs(Math.cos(player.bob)) * 0.02 * ba, light: player.headInWater ? 0.7 : 1 };
       if (!held) hand.arm = true;
+      else if (held === CM.I.BOW) { hand.bow = bowPull; hand.sprite = bowPull > 0.05 ? CM.TILES['bow_pulling_' + Math.min(2, Math.floor(bowPull * 2.99))] : CM.TILES.bow; }
       else if (Items.sprite(held) !== null) hand.sprite = Items.sprite(held);
       else hand.shape = Items.itemShape(held);
       extras.hand = hand;

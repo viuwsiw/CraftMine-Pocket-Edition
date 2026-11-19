@@ -83,3 +83,33 @@ LEATHER = [E, E,
  '....oommddoo....',
  '......oooo......', E, E, E]
 T['leather'] = mask(LEATHER, {'o': H('#3a2010'), 'd': H('#6e4026'), 'm': H('#8c5434'), 'l': H('#a86a44')})
+
+# Лук с натянутой тетивой и стрелой: 3 стадии натяжения (тетива оттягивается к правому нижнему углу)
+def bow_pull(k):
+    im = T['bow'].copy()
+    # стереть прямую тетиву
+    for t in range(0, 15):
+        x, y = 14 - t * 12 / 14, 1 + t * 13 / 14
+        ix, iy = int(round(x)), int(round(y))
+        if im.getpixel((ix, iy))[:3] == (232, 232, 232): im.putpixel((ix, iy), (0, 0, 0, 0))
+    a, b = (14, 1), (2, 14)
+    c = (8 + k, 7.5 + k)  # точка, куда оттянута тетива
+    def line(p, q, col):
+        n = int(max(abs(q[0] - p[0]), abs(q[1] - p[1])) * 2) + 1
+        for i in range(n + 1):
+            x = p[0] + (q[0] - p[0]) * i / n; y = p[1] + (q[1] - p[1]) * i / n
+            ix, iy = int(round(x)), int(round(y))
+            if 0 <= ix < N and 0 <= iy < N and im.getpixel((ix, iy))[3] == 0: im.putpixel((ix, iy), col)
+    # стрела: от тетивы вверх-влево через изгиб лука
+    tip = (c[0] - 9.5, c[1] - 9.5)
+    line(c, tip, H('#6b4f2c'))
+    for d in range(2):
+        tx, ty = int(round(tip[0])) + d, int(round(tip[1]))
+        if 0 <= tx < N and 0 <= ty < N: im.putpixel((tx, ty), H('#9a9aa0'))
+        if 0 <= ty + 1 < N and 0 <= tx - 1 < N: im.putpixel((max(0, tx - 1), ty + 1 if d else ty), H('#9a9aa0'))
+    fx, fy = int(round(c[0])), int(round(c[1]))
+    for (dx, dy) in ((0, 0), (1, 0), (0, 1)):
+        if 0 <= fx + dx < N and 0 <= fy + dy < N: im.putpixel((fx + dx, fy + dy), H('#f0f0f0'))
+    line(a, c, H('#e8e8e8')); line(b, c, H('#e8e8e8'))
+    return im
+for i, k in enumerate((1.0, 2.2, 3.4)): T[f'bow_pulling_{i}'] = bow_pull(k)

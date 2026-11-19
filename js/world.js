@@ -571,7 +571,8 @@
     return [tu, tv];
   }
   // Свет блока в вершине: оттенок грани (0..1) + 2 * уровень света от факелов/лавы (0..15), шейдер разбирает обратно
-  const lit = (shade, level) => shade + 2 * level;
+  // уровень хранится с шагом 1/8 — так свет плавно переливается между вершинами (плавное освещение)
+  const lit = (shade, level) => shade + 2 * Math.round(level * 8);
 
   // Меш блока сложной формы: каждая коробка — 6 граней, без затенения
   function meshShape(blk, x, y, z, get, o, level) {
@@ -699,7 +700,7 @@
     const data = ch.data;
     let o = 0, ow = 0;
     const p = [0, 0, 0], q = [0, 0, 0], lp = [0, 0, 0];
-    const ao = [0, 0, 0, 0];
+    const ao = [0, 0, 0, 0], vlight = [0, 0, 0, 0];
     const vx = new Float32Array(24); // 4 вершины * 6 float
     const tileStep = 1 / CM.Textures.perRow;
     const maxY = Math.min(H - 1, ch.maxY + 1);
@@ -754,6 +755,18 @@
                 q[F.u] -= du;
                 const s2 = OCCLUDES[get(q[0], q[1], q[2])];
                 ao[k] = (s1 && s2) ? 0 : 3 - (s1 + s2 + c);
+                // плавный свет: среднее по клетке перед гранью и трём соседним у этого угла (сквозь стены не берём)
+                if (L) {
+                  let sum = lightAt(p[0], p[1], p[2]), n = 1;
+                  const ax = p[0], ay = p[1], az = p[2];
+                  q[0] = ax; q[1] = ay; q[2] = az; q[F.u] += du;
+                  if (!s1) { sum += lightAt(q[0], q[1], q[2]); n++; }
+                  q[F.v] += dv;
+                  if (!c && !(s1 && s2)) { sum += lightAt(q[0], q[1], q[2]); n++; }
+                  q[F.u] -= du;
+                  if (!s2) { sum += lightAt(q[0], q[1], q[2]); n++; }
+                  vlight[k] = sum / n;
+                }
               }
               let ly = lp[1];
               if (ly === 1) ly = topH;
@@ -767,7 +780,7 @@
               const b = k * 6;
               vx[b] = x + lp[0]; vx[b + 1] = y + ly; vx[b + 2] = z + lp[2];
               vx[b + 3] = tu; vx[b + 4] = tv;
-              vx[b + 5] = lit(F.shade * AO_LEVEL[ao[k]], level);
+              vx[b + 5] = lit(F.shade * AO_LEVEL[ao[k]], L && !fl && rk !== R_GLASS ? Math.max(selfLight, vlight[k]) : level);
             }
 
             // Разворот диагонали квадрата, чтобы AO выглядело ровно
@@ -1066,11 +1079,13 @@
 
     _buildOffsets(R) {
       const list = [];
-      const r = R + 1;
+      // генерируем с запасом: у каждого чанка, который надо построить, должны быть готовы все 8 соседей
+      // (раньше диагональные соседи крайних чанков не генерировались — на краю были дыры, а при дальности 2 мир не загружался)
+      const r = R + 2;
       for (let dz = -r; dz <= r; dz++)
         for (let dx = -r; dx <= r; dx++) {
           const d2 = dx * dx + dz * dz;
-          if (d2 <= (r + 0.5) * (r + 0.5)) list.push({ dx, dz, d2, mesh: d2 <= (R + 0.5) * (R + 0.5) });
+          if (d2 <= (R + 2) * (R + 2)) list.push({ dx, dz, d2, mesh: d2 <= (R + 0.5) * (R + 0.5) });
         }
       list.sort((a, b) => a.d2 - b.d2);
       this.offsets = list;
@@ -1122,7 +1137,7 @@
       }
 
       if (++this.frame % 60 === 0) {
-        const lim = (R + 3) * (R + 3);
+        const lim = (R + 4) * (R + 4);
         for (const [k, ch] of this.chunks) {
           const dx = ch.cx - pcx, dz = ch.cz - pcz;
           if (dx * dx + dz * dz > lim) { this.disposeChunk(ch); this.chunks.delete(k); }

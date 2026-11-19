@@ -19,9 +19,11 @@ void main() {
   gl_Position = uProj * vp;
   vUV = aUV;
   // aLight = оттенок (0..1) + 2 * свет от факелов (0..15)
-  float bl = floor(aLight * 0.5 + 0.001);
-  vLight = aLight - bl * 2.0;
-  vBlock = bl > 0.5 ? pow(0.8, 15.0 - bl) : 0.0; // как в Minecraft: каждый блок от источника — на 20% темнее
+  // aLight = оттенок (0..1) + 2 * (свет от факелов * 8), свет 0..15 с шагом 1/8
+  float bl8 = floor(aLight * 0.5 + 0.001);
+  vLight = aLight - bl8 * 2.0;
+  float bl = bl8 / 8.0;
+  vBlock = bl > 0.06 ? pow(0.8, 15.0 - bl) : 0.0; // как в Minecraft: каждый блок от источника — на 20% темнее
   vFog = clamp((length(vp.xyz) - uFogNear) / (uFogFar - uFogNear), 0.0, 1.0);
 }`;
 
@@ -331,6 +333,15 @@ void main() {
         rot = [['y', 0.78 - sw * 0.45], ['x', 0.16 + sw * 0.7]];
         pos = [0.66 - sw * 0.25, -0.6 - sw * 0.12, -1.05 - sw * 0.2];
         if (hand.shape && hand.shape.parts) { scale = [0.5, 0.5, 0.5]; pos[1] += 0.05; } // кровать длиннее блока
+      }
+      if (sprite && hand.bow !== undefined) {
+        // лук (как в Minecraft): в покое — почти вертикально справа, изгибом к центру;
+        // при натяжении — поворачивается и смещается к центру, стрела смотрит в прицел
+        const k = Math.min(1, hand.bow * 1.6), L = (u, v) => u + (v - u) * k;
+        scale = [L(1.15, 1.2), L(1.15, 1.2), L(1.15, 1.2)];
+        rot = [['z', L(0.785, 1.3)], ['y', L(-1.25, -0.9)], ['x', L(-0.1, 0.1)]];
+        pos = [L(0.62, 0.47) - sw * 0.1, L(-0.3, -0.23), L(-0.9, -0.95)];
+        if (k > 0.9) { pos[0] += Math.sin(performance.now() / 45) * 0.004; pos[1] += Math.cos(performance.now() / 53) * 0.004; } // рука дрожит
       }
       const tune = CM.handTune && CM.handTune[arm ? 'arm' : sprite ? 'sprite' : 'block']; // для подбора углов
       if (tune) { scale = tune.scale || scale; rot = tune.rot || rot; pos = (tune.pos || pos).slice(); }
